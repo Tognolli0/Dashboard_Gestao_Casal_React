@@ -12,18 +12,18 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 if (builder.Environment.IsDevelopment())
 {
-    // Local: Usa o arquivo SQLite que você enviou
+    // Local: SQLite
     builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseSqlite(connectionString));
 }
 else
 {
-    // Web (Render): Usa o PostgreSQL do Supabase
+    // Web (Render): PostgreSQL
     builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseNpgsql(connectionString));
 }
 
-// 2. Registro da Compressão (Obrigatório para evitar erros de ativação)
+// 2. Registro da Compressão
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
@@ -32,12 +32,17 @@ builder.Services.AddResponseCompression(options =>
 });
 builder.Services.Configure<BrotliCompressionProviderOptions>(o => o.Level = CompressionLevel.Fastest);
 
-// 3. Serviços de Negócio
-builder.Services.AddSingleton<WhatsAppService>();
-builder.Services.AddSingleton<OCRService>();
+// 3. Serviços de Negócio (CORRIGIDO: De Singleton para Scoped)
+// Isso permite que eles usem o AppDbContext sem dar erro 500
+builder.Services.AddScoped<WhatsAppService>();
+builder.Services.AddScoped<OCRService>();
+
+// Adiciona suporte a requisições HTTP para os serviços (necessário para APIs externas)
+builder.Services.AddHttpClient();
+
 builder.Services.AddHostedService<ResumoWorker>();
 
-// 4. CORS - Configurado para aceitar Localhost e Vercel
+// 4. CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Livre", policy =>
@@ -54,16 +59,19 @@ var app = builder.Build();
 
 // --- MIDDLEWARES (A ORDEM É VITAL) ---
 
+// CORS deve vir antes de quase tudo
 app.UseCors("Livre");
-app.UseResponseCompression();
 
-app.UseSwagger();
-app.UseSwaggerUI(c =>
+if (app.Environment.IsDevelopment())
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "MinhaVida API v1");
-    // Removido o RoutePrefix vazio para não dar erro de JSON no Blazor
-});
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "MinhaVida API v1");
+    });
+}
 
+app.UseResponseCompression();
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
