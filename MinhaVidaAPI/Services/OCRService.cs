@@ -12,7 +12,7 @@ namespace MinhaVidaAPI.Services
 
         // No OCRService.cs da API
         private readonly string endpoint = "https://ocrreservaconjunta.cognitiveservices.azure.com/"; // REMOVA A BARRA NO FINAL
-        private readonly string key = "EddE756vBsQQfYqPA7yc8UmJbmPyHPnMTtMwtp0dsOP7WHPvRNOhJQQJ99CCACYeBjFXJ3w3AAAFACOGIuS9"; // Verifique se não há espaços antes ou depois
+        private readonly string key = ""; // Verifique se não há espaços antes ou depois
 
         public async Task<string> LerTextoDaImagemAsync(Stream imagemStream)
         {
