@@ -1,0 +1,14 @@
+[build]
+  base = "MinhaVidaDashboard"
+  
+  # Usaremos a pasta 'meu_deploy' que não existe no .gitignore
+  command = "curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 10.0 --install-dir .dotnet && ./.dotnet/dotnet publish MinhaVidaDashboard.csproj -c Release -o meu_deploy"
+  
+  # O Netlify busca o index.html em meu_deploy/wwwroot
+  publish = "meu_deploy/wwwroot"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = false
