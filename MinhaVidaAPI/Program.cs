@@ -9,19 +9,18 @@ var builder = WebApplication.CreateBuilder(args);
 
 // 1. Configuração Híbrida de Banco de Dados
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-
-if (builder.Environment.IsDevelopment())
-{
-    // Local: SQLite
-    builder.Services.AddDbContext<AppDbContext>(options =>
-        options.UseSqlite(connectionString));
-}
-else
-{
-    // Web (Render): PostgreSQL
-    builder.Services.AddDbContext<AppDbContext>(options =>
-        options.UseNpgsql(connectionString));
-}
+//if (builder.Environment.IsDevelopment())
+//{
+//    // Local: SQLite
+//    builder.Services.AddDbContext<AppDbContext>(options =>
+//        options.UseSqlite(connectionString));
+//}
+//else
+//{
+// Web (Render): PostgreSQL
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+//}
 
 // 2. Registro da Compressão
 builder.Services.AddResponseCompression(options =>
