@@ -4,7 +4,7 @@ import type { Transacao, Meta, Desejo, DashboardResumo } from '../types/models';
 // 1. Configuração Base
 const api = axios.create({
   // A URL que aparece na sua imagem do terminal
-  baseURL: 'http://localhost:5163', 
+  baseURL: 'https://minhavidaapi.onrender.com',
   timeout: 60000,
 })
 
