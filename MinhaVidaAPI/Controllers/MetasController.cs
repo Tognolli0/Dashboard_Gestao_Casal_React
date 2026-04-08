@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MinhaVidaAPI.Data;
 using MinhaVidaAPI.Models;
-using MinhaVidaAPI.Services; // Adicionado para acessar o serviço de WhatsApp
+using MinhaVidaAPI.Services;
 
 namespace MinhaVidaAPI.Controllers
 {
@@ -11,7 +11,7 @@ namespace MinhaVidaAPI.Controllers
     public class MetasController : ControllerBase
     {
         private readonly AppDbContext _context;
-        private readonly WhatsAppService _waService; // Injeção do serviço
+        private readonly WhatsAppService _waService;
 
         public MetasController(AppDbContext context, WhatsAppService waService)
         {
@@ -25,22 +25,40 @@ namespace MinhaVidaAPI.Controllers
             return await _context.Metas.AsNoTracking().ToListAsync();
         }
 
+        // POST: cria uma nova meta — CORRIGIDO: era Update, agora é Add
         [HttpPost]
         public async Task<ActionResult<Meta>> PostMeta(Meta meta)
         {
-            _context.Metas.Update(meta);
+            // Garante que o ID é 0 para que o banco gere um novo
+            meta.Id = 0;
+
+            _context.Metas.Add(meta);
             await _context.SaveChangesAsync();
 
-            // Notifica o casal que um novo plano começou!
-            await _waService.EnviarMensagemParaCasal($"✨ *NOVO SONHO LANÇADO!* ✨\n\n" +
-                $"Acabei de cadastrar a meta: *{meta.Titulo}* 🎯\n" +
-                $"Objetivo: {meta.ValorObjetivo:C}\n" +
-                $"_Bora conquistar mais essa juntos!_ ❤️");
+            try
+            {
+                await _waService.EnviarMensagemParaCasal(
+                    $"✨ *NOVO SONHO LANÇADO!* ✨\n\n" +
+                    $"Meta cadastrada: *{meta.Titulo}* 🎯\n" +
+                    $"Objetivo: {meta.ValorObjetivo:C}\n" +
+                    $"_Bora conquistar mais essa juntos!_ ❤️");
+            }
+            catch
+            {
+                // WhatsApp nunca deve derrubar o endpoint principal
+            }
 
-            return Ok(meta);
+            return CreatedAtAction(nameof(GetMeta), new { id = meta.Id }, meta);
         }
 
-        // Novo método para atualizar o progresso da meta
+        [HttpGet("{id}")]
+        public async Task<ActionResult<Meta>> GetMeta(int id)
+        {
+            var meta = await _context.Metas.FindAsync(id);
+            if (meta == null) return NotFound();
+            return meta;
+        }
+
         [HttpPut("{id}")]
         public async Task<IActionResult> PutMeta(int id, Meta meta)
         {
@@ -50,17 +68,18 @@ namespace MinhaVidaAPI.Controllers
 
             try
             {
-                // Pegamos a versão "antiga" para comparar o progresso se necessário
-                var metaAntiga = await _context.Metas.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id);
-
                 await _context.SaveChangesAsync();
 
-                // GATILHO DE CONQUISTA: Se a meta não estava batida e agora está
-                if (metaAntiga != null && meta.ValorGuardado >= meta.ValorObjetivo)
+                if (meta.ValorGuardado >= meta.ValorObjetivo)
                 {
-                    await _waService.EnviarMensagemParaCasal($"🎊 *META ATINGIDA!* 🎊\n\n" +
-                        $"Conseguimos completar o objetivo: *{meta.Titulo}*! ✅\n" +
-                        $"Nosso futuro está cada vez mais sólido. Orgulho de nós! ❤️🚀");
+                    try
+                    {
+                        await _waService.EnviarMensagemParaCasal(
+                            $"🎊 *META ATINGIDA!* 🎊\n\n" +
+                            $"Conseguimos completar: *{meta.Titulo}*! ✅\n" +
+                            $"Orgulho de nós! ❤️🚀");
+                    }
+                    catch { }
                 }
             }
             catch (DbUpdateConcurrencyException)
@@ -84,7 +103,6 @@ namespace MinhaVidaAPI.Controllers
             return NoContent();
         }
 
-        // POST: api/metas/{id}/aporte
         [HttpPost("{id}/aporte")]
         public async Task<IActionResult> RealizarAporte(int id, [FromBody] double valorAporte)
         {
@@ -94,18 +112,17 @@ namespace MinhaVidaAPI.Controllers
             meta.ValorGuardado += valorAporte;
             await _context.SaveChangesAsync();
 
-            // Notificação de progresso
-            await _waService.EnviarMensagemParaCasal(
-                $"💰 *NOVO APORTE!* \n\n" +
-                $"Somamos *{valorAporte:C}* na meta: *{meta.Titulo}*! 🚀\n" +
-                $"Total guardado: {meta.ValorGuardado:C} ({meta.Porcentagem:F1}%)"
-            );
-
-            // Se bateu a meta com esse aporte, manda a comemoração
-            if (meta.ValorGuardado >= meta.ValorObjetivo)
+            try
             {
-                await _waService.EnviarMensagemParaCasal($"🎊 *META ATINGIDA COM ESSE APORTE!* ✅");
+                await _waService.EnviarMensagemParaCasal(
+                    $"💰 *NOVO APORTE!*\n\n" +
+                    $"Somamos *{valorAporte:C}* na meta: *{meta.Titulo}*! 🚀\n" +
+                    $"Total guardado: {meta.ValorGuardado:C} ({meta.Porcentagem:F1}%)");
+
+                if (meta.ValorGuardado >= meta.ValorObjetivo)
+                    await _waService.EnviarMensagemParaCasal("🎊 *META ATINGIDA COM ESSE APORTE!* ✅");
             }
+            catch { }
 
             return Ok(meta);
         }

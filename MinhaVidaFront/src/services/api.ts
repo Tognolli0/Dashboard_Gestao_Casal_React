@@ -1,52 +1,35 @@
 import axios from 'axios';
 import type { Transacao, Meta, Desejo, DashboardResumo } from '../types/models';
 
-// ── CLIENTE AXIOS OTIMIZADO ───────────────────────────────────────────────────
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL ?? 'https://minhavidaapi.onrender.com',
-    // 120s para o primeiro cold start do Render (free tier dorme após 15min)
     timeout: 120_000,
     headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        // Solicita compressão gzip/brotli ao servidor
-        'Accept-Encoding': 'br, gzip, deflate',
     },
 });
 
-// ── INTERCEPTOR: log + retry automático ─────────────────────────────────────
-let isWarming = false;
-
+// Retry automático no cold start do Render
 api.interceptors.response.use(
-    response => response,
+    res => res,
     async (error) => {
         const config = error.config;
-
-        // Retry automático UMA vez em timeout ou erro 503 (Render acordando)
-        if (
-            !config._retry &&
-            (error.code === 'ECONNABORTED' || error.response?.status === 503)
-        ) {
+        if (!config._retry && (error.code === 'ECONNABORTED' || error.response?.status === 503)) {
             config._retry = true;
-            console.warn('[API] Servidor dormindo, aguardando 3s e tentando novamente...');
             await new Promise(r => setTimeout(r, 3000));
             return api(config);
         }
-
-        console.error('[API] Erro:', error.message);
+        console.error('[API]', error.response?.status, error.message);
         return Promise.reject(error);
     }
 );
 
-// ── WARM-UP: pinga a API assim que o módulo é carregado ──────────────────────
-// Isso "acorda" o Render antes do usuário fazer a primeira requisição real.
+let _warmed = false;
 export function warmUpAPI() {
-    if (isWarming) return;
-    isWarming = true;
-
-    api.get('/').catch(() => {
-        // Silencia erros — só estamos acordando o servidor
-    });
+    if (_warmed) return;
+    _warmed = true;
+    api.get('/').catch(() => { });
 }
 
 // ── QUERIES ───────────────────────────────────────────────────────────────────
@@ -65,23 +48,40 @@ export const getDesejos = (): Promise<Desejo[]> =>
 
 // ── MUTATIONS ─────────────────────────────────────────────────────────────────
 
+// Envia valor POSITIVO — o backend aplica o sinal correto baseado no campo Tipo
 export const postTransacao = (t: Partial<Transacao>): Promise<Transacao> =>
-    api.post('/api/transacoes', t).then(r => r.data);
+    api.post('/api/transacoes', {
+        ...t,
+        id: 0,
+        valor: Math.abs(Number(t.valor)),
+        data: t.data ?? new Date().toISOString(),
+    }).then(r => r.data);
 
 export const deleteTransacao = (id: number): Promise<void> =>
     api.delete(`/api/transacoes/${id}`).then(() => undefined);
 
 export const postMeta = (m: Partial<Meta>): Promise<Meta> =>
-    api.post('/api/metas', m).then(r => r.data);
+    api.post('/api/metas', { ...m, id: 0 }).then(r => r.data);
+
+export const putMeta = (m: Meta): Promise<Meta> =>
+    api.put(`/api/metas/${m.id}`, m).then(r => r.data);
 
 export const deleteMeta = (id: number): Promise<void> =>
     api.delete(`/api/metas/${id}`).then(() => undefined);
 
 export const realizarAporte = (id: number, valor: number): Promise<Meta> =>
-    api.post(`/api/metas/${id}/aporte`, { valor }).then(r => r.data);
+    api.post(`/api/metas/${id}/aporte`, valor, {
+        headers: { 'Content-Type': 'application/json' },
+    }).then(r => r.data);
 
 export const postDesejo = (d: Partial<Desejo>): Promise<Desejo> =>
-    api.post('/api/desejos', d).then(r => r.data);
+    api.post('/api/desejos', {
+        ...d,
+        id: 0,
+        dataAlvo: d.dataAlvo
+            ? new Date(d.dataAlvo).toISOString()
+            : new Date().toISOString(),
+    }).then(r => r.data);
 
 export const deleteDesejo = (id: number): Promise<void> =>
     api.delete(`/api/desejos/${id}`).then(() => undefined);
