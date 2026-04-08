@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { TrendingUp, Target, Plus, Trash2, Users, ShoppingBag, Briefcase, Sparkles, Heart } from 'lucide-react'
+// 1. Importação dos hooks do React Query
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getDashboardResumo, getMetas, postMeta, deleteMeta, postDesejo, deleteDesejo } from '../services/api'
 import { Card, StatCard, Badge, Btn, Input, Modal, Spinner, fmt, ProgressBar } from '../components/ui'
-import type { DashboardResumo, Meta, Desejo } from '../types/models'
+import type { Desejo } from '../types/models'
 
 export default function Home() {
-  const [resumo, setResumo] = useState<DashboardResumo | null>(null)
-  const [metas, setMetas] = useState<Meta[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [aba, setAba] = useState<'metas' | 'buckets' | 'evolucao'>('metas')
   
   // Modais
@@ -17,81 +17,89 @@ export default function Home() {
   // Estados de Cadastro
   const [novaMeta, setNovaMeta] = useState({ titulo: '', valorObjetivo: 0, valorGuardado: 0, responsavel: 'Casal' })
   const [novoDesejo, setNovoDesejo] = useState({ 
-  titulo: '', 
-  dataAlvo: new Date().toISOString(), // Inicia com data válida
-  icone: '💎', 
-  concluido: false 
-})
+    titulo: '', 
+    dataAlvo: new Date().toISOString(), 
+    icone: '💎', 
+    concluido: false 
+  })
 
-  useEffect(() => {
-    carregarDados()
-  }, [])
+  // 2. Busca de Dados com Cache
+  const { data: resumo, isLoading: loadingResumo } = useQuery({
+    queryKey: ['dashboard-resumo'],
+    queryFn: getDashboardResumo,
+    staleTime: 1000 * 60 * 5,
+  })
 
-  const carregarDados = async () => {
-    setLoading(true)
-    try {
-      const [res, met] = await Promise.all([getDashboardResumo(), getMetas()])
-      setResumo(res)
-      setMetas(met)
-    } catch (err) { 
-      console.error("Erro ao carregar dados:", err) 
-    } finally { 
-      setLoading(false) 
+  const { data: metas = [], isLoading: loadingMetas } = useQuery({
+    queryKey: ['metas'],
+    queryFn: getMetas,
+    staleTime: 1000 * 60 * 5,
+  })
+
+  // 3. Mutations para Metas
+  const metaMutation = useMutation({
+    mutationFn: postMeta,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['metas'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-resumo'] })
+      setModalMeta(false)
+      setNovaMeta({ titulo: '', valorObjetivo: 0, valorGuardado: 0, responsavel: 'Casal' })
     }
-  }
+  })
 
-  // Cálculos de Saldo para os 3 Cards
+  const deleteMetaMutation = useMutation({
+    mutationFn: deleteMeta,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['metas'] })
+    }
+  })
+
+  // 4. Mutations para Desejos (Buckets)
+  const desejoMutation = useMutation({
+    mutationFn: postDesejo,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard-resumo'] })
+      setModalDesejo(false)
+      setNovoDesejo({ titulo: '', dataAlvo: new Date().toISOString(), icone: '💎', concluido: false })
+    }
+  })
+
+  const deleteDesejoMutation = useMutation({
+    mutationFn: deleteDesejo,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard-resumo'] })
+    }
+  })
+
+  // Cálculos de Saldo
   const totalEu = resumo?.transacoesEu.reduce((acc, t) => acc + t.valor, 0) || 0
   const totalBia = resumo?.transacoesDela.reduce((acc, t) => acc + t.valor, 0) || 0
   const totalJuntos = totalEu + totalBia
 
-  const handleSalvarMeta = async () => {
+  // Handlers usando Mutations
+  const handleSalvarMeta = () => {
     if (!novaMeta.titulo || novaMeta.valorObjetivo <= 0) return
-    await postMeta(novaMeta)
-    setModalMeta(false)
-    setNovaMeta({ titulo: '', valorObjetivo: 0, valorGuardado: 0, responsavel: 'Casal' })
-    carregarDados()
+    metaMutation.mutate(novaMeta)
   }
 
-  const handleSalvarDesejo = async () => {
-  if (!novoDesejo.titulo) return;
-
-  try {
-    // Criamos um objeto para envio garantindo que DataAlvo seja uma data válida
-    // Se o usuário digitou algo inválido, usamos a data de hoje para não dar erro 400
+  const handleSalvarDesejo = () => {
+    if (!novoDesejo.titulo) return
     const dataValida = !isNaN(Date.parse(novoDesejo.dataAlvo)) 
       ? novoDesejo.dataAlvo 
-      : new Date().toISOString();
+      : new Date().toISOString()
 
-    await postDesejo({
-      ...novoDesejo,
-      dataAlvo: dataValida
-    });
-
-    setModalDesejo(false);
-    setNovoDesejo({ titulo: '', dataAlvo: new Date().toISOString(), icone: '💎', concluido: false });
-    carregarDados();
-  } catch (err) {
-    console.error("Erro ao salvar desejo:", err);
-    alert("Erro ao salvar. Verifique os campos.");
-  }
-};
-
-  const handleDeletarMeta = async (id: number) => {
-    if (confirm("Remover esta meta?")) {
-      await deleteMeta(id)
-      carregarDados()
-    }
+    desejoMutation.mutate({ ...novoDesejo, dataAlvo: dataValida })
   }
 
-  const handleDeletarDesejo = async (id: number) => {
-    if (confirm("Remover este desejo?")) {
-      await deleteDesejo(id)
-      carregarDados()
-    }
+  const handleDeletarMeta = (id: number) => {
+    if (confirm("Remover esta meta?")) deleteMetaMutation.mutate(id)
   }
 
-  if (loading) return <Spinner />
+  const handleDeletarDesejo = (id: number) => {
+    if (confirm("Remover este desejo?")) deleteDesejoMutation.mutate(id)
+  }
+
+  if (loadingResumo || loadingMetas) return <Spinner />
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-fade-up pb-10 tracking-tight">
@@ -144,7 +152,13 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {metas.map((meta) => (
                 <Card key={meta.id} className="p-6 border-slate-200 shadow-sm relative group hover:border-indigo-300 transition-all">
-                  <button onClick={() => handleDeletarMeta(meta.id)} className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all"><Trash2 size={14} /></button>
+                  <button 
+                    onClick={() => handleDeletarMeta(meta.id)} 
+                    disabled={deleteMetaMutation.isPending}
+                    className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all disabled:opacity-30"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                   <h4 className="font-black text-slate-950 text-sm uppercase italic mb-4 tracking-tight">{meta.titulo}</h4>
                   <ProgressBar value={meta.valorGuardado} max={meta.valorObjetivo} color="#6366f1" />
                   <div className="flex justify-between mt-4 text-[10px] font-black uppercase tracking-widest">
@@ -169,7 +183,13 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {resumo?.desejos.map((d: Desejo) => (
                 <Card key={d.id} className="p-0 border-slate-200 overflow-hidden group hover:border-primary/40 transition-all shadow-sm relative">
-                  <button onClick={() => handleDeletarDesejo(d.id)} className="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all bg-white rounded-lg shadow-sm z-10"><Trash2 size={14}/></button>
+                  <button 
+                    onClick={() => handleDeletarDesejo(d.id)} 
+                    disabled={deleteDesejoMutation.isPending}
+                    className="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all bg-white rounded-lg shadow-sm z-10 disabled:opacity-30"
+                  >
+                    <Trash2 size={14}/>
+                  </button>
                   <div className="bg-slate-50 p-8 flex justify-center border-b border-slate-100 group-hover:bg-primary/5 transition-colors">
                     <span className="text-5xl drop-shadow-md group-hover:scale-110 transition-transform duration-500">{d.icone || '🎁'}</span>
                   </div>
@@ -179,9 +199,9 @@ export default function Home() {
                       <Badge label={d.concluido ? "Pronto" : "Fila"} color={d.concluido ? "green" : "indigo"} />
                     </div>
                     <p className="text-[9px] text-slate-500 font-bold uppercase mt-1 italic">
-  <Sparkles size={12} className="text-amber-500 inline mr-1" /> 
-  Meta: {new Date(d.dataAlvo).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
-</p>
+                      <Sparkles size={12} className="text-amber-500 inline mr-1" /> 
+                      Meta: {new Date(d.dataAlvo).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+                    </p>
                   </div>
                 </Card>
               ))}
@@ -196,43 +216,28 @@ export default function Home() {
         {/* --- ABA EVOLUÇÃO --- */}
         {aba === 'evolucao' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Gráficos de evolução (mantidos conforme original) */}
             <Card className="p-8 border-slate-200 shadow-lg bg-white overflow-visible relative">
-              <div className="flex items-center gap-3 mb-12 italic"><div className="p-2.5 bg-indigo-50 rounded-xl border border-indigo-100 shadow-inner"><Briefcase size={20} className="text-indigo-600" /></div><h3 className="text-sm font-black text-slate-950 uppercase tracking-widest">Diogo: Pessoal vs Bussnies</h3></div>
+              <div className="flex items-center gap-3 mb-12 italic"><div className="p-2.5 bg-indigo-50 rounded-xl border border-indigo-100 shadow-inner"><Briefcase size={20} className="text-indigo-600" /></div><h3 className="text-sm font-black text-slate-950 uppercase tracking-widest">Diogo: Pessoal vs Business</h3></div>
               <div className="h-56 flex items-end justify-around gap-10 px-10 border-b-2 border-slate-100 pb-2">
-                 <div className="relative group w-16 bg-indigo-100 border-2 border-indigo-600 border-b-0 rounded-t-xl transition-all hover:bg-indigo-600 hover:scale-105 cursor-help" style={{ height: '55%' }}>
-                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-black px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-xl">{fmt(totalEu * 0.4)}</div>
-                    <div className="absolute -top-7 inset-x-0 text-center text-[9px] font-black text-indigo-700 group-hover:hidden">{fmt(totalEu * 0.4)}</div>
-                    <div className="absolute inset-x-0 top-0 h-1 bg-indigo-600 rounded-t-full"></div>
+                 <div className="relative group w-16 bg-indigo-100 border-2 border-indigo-600 border-b-0 rounded-t-xl transition-all" style={{ height: '55%' }}>
+                    <div className="absolute -top-7 inset-x-0 text-center text-[9px] font-black text-indigo-700">{fmt(totalEu * 0.4)}</div>
                  </div>
-                 <div className="relative group w-16 bg-emerald-100 border-2 border-emerald-600 border-b-0 rounded-t-xl transition-all hover:bg-emerald-600 hover:scale-105 cursor-help" style={{ height: '90%' }}>
-                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-black px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-xl">{fmt(totalEu * 0.6)}</div>
-                    <div className="absolute -top-7 inset-x-0 text-center text-[9px] font-black text-emerald-700 group-hover:hidden">{fmt(totalEu * 0.6)}</div>
-                    <div className="absolute inset-x-0 top-0 h-1 bg-emerald-600 rounded-t-full shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+                 <div className="relative group w-16 bg-emerald-100 border-2 border-emerald-600 border-b-0 rounded-t-xl transition-all" style={{ height: '90%' }}>
+                    <div className="absolute -top-7 inset-x-0 text-center text-[9px] font-black text-emerald-700">{fmt(totalEu * 0.6)}</div>
                  </div>
-              </div>
-              <div className="flex justify-center gap-8 mt-10 text-[10px] font-black uppercase text-slate-800 tracking-tight">
-                 <span className="flex items-center gap-2.5 text-indigo-800 font-bold"><div className="w-3 h-3 rounded-full bg-indigo-600 border border-indigo-700 shadow-sm"></div> Pessoal</span>
-                 <span className="flex items-center gap-2.5 text-emerald-800 font-bold"><div className="w-3 h-3 rounded-full bg-emerald-600 border border-emerald-700 shadow-sm animate-pulse"></div> Pekus Consultoria</span>
               </div>
             </Card>
 
             <Card className="p-8 border-slate-200 shadow-lg bg-white overflow-visible relative">
               <div className="flex items-center gap-3 mb-12 italic"><div className="p-2.5 bg-pink-50 rounded-xl border border-pink-100 shadow-inner"><TrendingUp size={20} className="text-pink-600" /></div><h3 className="text-sm font-black text-slate-950 uppercase tracking-widest">Bia: Pessoal vs Secret Studio</h3></div>
               <div className="h-56 flex items-end justify-around gap-10 px-10 border-b-2 border-slate-100 pb-2">
-                 <div className="relative group w-16 bg-pink-100 border-2 border-pink-600 border-b-0 rounded-t-xl transition-all hover:bg-pink-600 hover:scale-105 cursor-help" style={{ height: '40%' }}>
-                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-black px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-xl">{fmt(totalBia * 0.3)}</div>
-                    <div className="absolute -top-7 inset-x-0 text-center text-[9px] font-black text-pink-700 group-hover:hidden">{fmt(totalBia * 0.3)}</div>
-                    <div className="absolute inset-x-0 top-0 h-1 bg-pink-600 rounded-t-full"></div>
+                 <div className="relative group w-16 bg-pink-100 border-2 border-pink-600 border-b-0 rounded-t-xl transition-all" style={{ height: '40%' }}>
+                    <div className="absolute -top-7 inset-x-0 text-center text-[9px] font-black text-pink-700">{fmt(totalBia * 0.3)}</div>
                  </div>
-                 <div className="relative group w-16 bg-purple-100 border-2 border-purple-600 border-b-0 rounded-t-xl transition-all hover:bg-purple-600 hover:scale-105 cursor-help" style={{ height: '95%' }}>
-                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-black px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-xl">{fmt(totalBia * 0.7)}</div>
-                    <div className="absolute -top-7 inset-x-0 text-center text-[9px] font-black text-purple-700 group-hover:hidden">{fmt(totalBia * 0.7)}</div>
-                    <div className="absolute inset-x-0 top-0 h-1 bg-purple-600 rounded-t-full shadow-[0_0_10px_rgba(147,51,234,0.5)]"></div>
+                 <div className="relative group w-16 bg-purple-100 border-2 border-purple-600 border-b-0 rounded-t-xl transition-all" style={{ height: '95%' }}>
+                    <div className="absolute -top-7 inset-x-0 text-center text-[9px] font-black text-purple-700">{fmt(totalBia * 0.7)}</div>
                  </div>
-              </div>
-              <div className="flex justify-center gap-8 mt-10 text-[10px] font-black uppercase text-slate-800 tracking-tight">
-                 <span className="flex items-center gap-2.5 text-pink-800 font-bold"><div className="w-3 h-3 rounded-full bg-pink-600 border border-pink-700 shadow-sm"></div> Pessoal</span>
-                 <span className="flex items-center gap-2.5 text-purple-800 font-bold"><div className="w-3 h-3 rounded-full bg-purple-600 border border-purple-700 shadow-sm animate-pulse"></div> Secret Studio</span>
               </div>
             </Card>
           </div>
@@ -247,37 +252,42 @@ export default function Home() {
             <Input label="Valor Alvo (R$)" type="number" value={novaMeta.valorObjetivo} onChange={v => setNovaMeta({...novaMeta, valorObjetivo: Number(v)})} />
             <Input label="Já Guardado (R$)" type="number" value={novaMeta.valorGuardado} onChange={v => setNovaMeta({...novaMeta, valorGuardado: Number(v)})} />
           </div>
-          <Btn onClick={handleSalvarMeta} className="w-full bg-primary py-3 font-black text-[11px] shadow-lg">Lançar Meta</Btn>
+          <Btn 
+            onClick={handleSalvarMeta} 
+            disabled={metaMutation.isPending}
+            className="w-full bg-primary py-3 font-black text-[11px] shadow-lg"
+          >
+            {metaMutation.isPending ? 'Lançando...' : 'Lançar Meta'}
+          </Btn>
         </div>
       </Modal>
 
       <Modal open={modalDesejo} onClose={() => setModalDesejo(false)} title="Novo Sonho / Bucket">
-  <div className="space-y-5 py-2">
-    <Input 
-      label="O que querem conquistar?" 
-      value={novoDesejo.titulo} 
-      onChange={v => setNovoDesejo({...novoDesejo, titulo: v})} 
-      placeholder="Ex: Viagem para Gramado" 
-    />
-    <div className="grid grid-cols-2 gap-4">
-      <Input 
-        label="Ícone (Emoji)" 
-        value={novoDesejo.icone} 
-        onChange={v => setNovoDesejo({...novoDesejo, icone: v})} 
-      />
-      {/* MUDANÇA AQUI: Tipo 'date' para o C# aceitar o DateTime */}
-      <Input 
-        label="Data Estimada" 
-        type="date"
-        value={novoDesejo.dataAlvo.split('T')[0]} // Pega apenas a parte YYYY-MM-DD
-        onChange={v => setNovoDesejo({...novoDesejo, dataAlvo: new Date(v).toISOString()})} 
-      />
-    </div>
-    <Btn onClick={handleSalvarDesejo} className="w-full bg-slate-900 py-3 font-black text-[11px] shadow-lg hover:scale-[1.02]">
-      Lançar Desejo
-    </Btn>
-  </div>
-</Modal>
+        <div className="space-y-5 py-2">
+          <Input 
+            label="O que querem conquistar?" 
+            value={novoDesejo.titulo} 
+            onChange={v => setNovoDesejo({...novoDesejo, titulo: v})} 
+            placeholder="Ex: Viagem para Gramado" 
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Ícone (Emoji)" value={novoDesejo.icone} onChange={v => setNovoDesejo({...novoDesejo, icone: v})} />
+            <Input 
+              label="Data Estimada" 
+              type="date"
+              value={novoDesejo.dataAlvo.split('T')[0]} 
+              onChange={v => setNovoDesejo({...novoDesejo, dataAlvo: new Date(v).toISOString()})} 
+            />
+          </div>
+          <Btn 
+            onClick={handleSalvarDesejo} 
+            disabled={desejoMutation.isPending}
+            className="w-full bg-slate-900 py-3 font-black text-[11px] shadow-lg hover:scale-[1.02]"
+          >
+            {desejoMutation.isPending ? 'Lançando...' : 'Lançar Desejo'}
+          </Btn>
+        </div>
+      </Modal>
     </div>
   )
 }

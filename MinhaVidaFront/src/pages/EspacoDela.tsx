@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
-import { Trash2, Heart } from 'lucide-react'
+import { useState } from 'react'
+import { Trash2 } from 'lucide-react'
+// 1. Hooks do React Query
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getTransacoes, postTransacao, deleteTransacao } from '../services/api'
 import { Card, StatCard, Badge, Btn, Input, Select, Spinner, fmt } from '../components/ui'
 import type { Transacao } from '../types/models'
@@ -8,31 +10,53 @@ const CATEGORIAS = ['Procedimentos','Materiais','Aluguel','Cursos','Lazer','Pess
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 
 export default function EspacoDela() {
-  const [lista, setLista] = useState<Transacao[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [mes, setMes] = useState(new Date().getMonth())
   const [aba, setAba] = useState<'pessoal' | 'studio'>('pessoal')
   const [form, setForm] = useState<Partial<Transacao>>({
     responsavel: 'Namorada', ehPessoal: true, tipo: 'Saída', categoria: 'Geral', descricao: '', valor: 0
   })
 
-  useEffect(() => {
-    setLoading(true)
-    getTransacoes('Namorada').then(d => { setLista(d); setLoading(false) })
-  }, [])
+  // 2. Busca com Cache
+  const { data: lista = [], isLoading } = useQuery({
+    queryKey: ['transacoes', 'Namorada'],
+    queryFn: () => getTransacoes('Namorada'),
+    staleTime: 1000 * 60 * 5,
+  })
+
+  // 3. Mutation para Salvar
+  const saveMutation = useMutation({
+    mutationFn: postTransacao,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transacoes', 'Namorada'] })
+      setForm({ ...form, descricao: '', valor: 0 })
+    }
+  })
+
+  // 4. Mutation para Deletar
+  const deleteMutation = useMutation({
+    mutationFn: deleteTransacao,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transacoes', 'Namorada'] })
+    }
+  })
 
   const filtradas = lista.filter(t => new Date(t.data).getMonth() === mes && t.ehPessoal === (aba === 'pessoal'))
   const saldo = filtradas.reduce((acc, t) => acc + (t.tipo === 'Entrada' ? Math.abs(t.valor) : -Math.abs(t.valor)), 0)
 
-  const salvar = async () => {
+  const salvar = () => {
     if (!form.descricao || !form.valor) return
     const valorFinal = form.tipo === 'Saída' ? -Math.abs(Number(form.valor)) : Math.abs(Number(form.valor))
-    const nova = await postTransacao({ ...form, ehPessoal: aba === 'pessoal', valor: valorFinal, data: new Date().toISOString() })
-    setLista([nova, ...lista])
-    setForm({ ...form, descricao: '', valor: 0 })
+    
+    saveMutation.mutate({ 
+      ...form, 
+      ehPessoal: aba === 'pessoal', 
+      valor: valorFinal, 
+      data: new Date().toISOString() 
+    })
   }
 
-  if (loading) return <Spinner />
+  if (isLoading) return <Spinner />
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-fade-up pb-10 text-slate-900">
@@ -63,7 +87,7 @@ export default function EspacoDela() {
               <Input label="Valor" type="number" value={form.valor!} onChange={v => setForm({...form, valor: v === '' ? 0 : Number(v)})} />
               <Select label="Tipo" value={form.tipo!} onChange={v => setForm({...form, tipo: v as any})} options={[{ value: 'Saída', label: 'Saída 🔻' }, { value: 'Entrada', label: 'Entrada 🔺' }]} />
               <Select label="Categoria" value={form.categoria!} onChange={v => setForm({...form, categoria: v})} options={CATEGORIAS.map(c => ({value:c, label:c}))} />
-              <Btn onClick={salvar} className="h-fit mt-auto bg-secondary">Lançar</Btn>
+              <Btn onClick={salvar} className="h-fit mt-auto bg-secondary" disabled = {saveMutation.isPending}>Lançar</Btn>
            </div>
         </Card>
       </div>
@@ -83,7 +107,13 @@ export default function EspacoDela() {
                   {t.tipo === 'Entrada' ? '▲' : '▼'} {fmt(t.valor)}
                 </td>
                 <td className="p-4 text-right">
-                  <button onClick={() => deleteTransacao(t.id).then(() => setLista(lista.filter(x => x.id !== t.id)))} className="text-slate-200 hover:text-red-500"><Trash2 size={16}/></button>
+                  <button 
+                    onClick={() => deleteMutation.mutate(t.id)} 
+                    disabled={deleteMutation.isPending}
+                    className="text-slate-200 hover:text-red-500 disabled:opacity-50"
+                  >
+                    <Trash2 size={16}/>
+                  </button>
                 </td>
               </tr>
             ))}

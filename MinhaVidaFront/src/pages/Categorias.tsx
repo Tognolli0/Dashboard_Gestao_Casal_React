@@ -1,35 +1,25 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { 
   PieChart, BarChart, TrendingUp, Search, 
-  Users, ArrowUpCircle, ArrowDownCircle,
+  ArrowUpCircle, ArrowDownCircle,
   Calendar, Briefcase, Home as HomeIcon
 } from 'lucide-react'
+// 1. Importação do hook de cache
+import { useQuery } from '@tanstack/react-query'
 import { getDashboardResumo } from '../services/api'
-import { Card, Badge, Spinner, fmt } from '../components/ui'
-import type { DashboardResumo, Transacao } from '../types/models'
+import { Badge, Spinner, fmt } from '../components/ui'
 
 export default function Categorias() {
-  const [resumo, setResumo] = useState<DashboardResumo | null>(null)
-  const [loading, setLoading] = useState(true)
+  // 2. Configuração do Cache com useQuery
+  const { data: resumo, isLoading } = useQuery({
+    queryKey: ['dashboard-resumo'],
+    queryFn: getDashboardResumo,
+    staleTime: 1000 * 60 * 5, // Mantém os dados "frescos" por 5 minutos
+  })
+
   const [mesSelecionado, setMesSelecionado] = useState(new Date().getMonth() + 1)
   const [pessoaSelecionada, setPessoaSelecionada] = useState<'Todos' | 'Eu' | 'Namorada'>('Todos')
   const [filtroTexto, setFiltroTexto] = useState('')
-
-  useEffect(() => {
-    carregarDados()
-  }, [])
-
-  const carregarDados = async () => {
-    setLoading(true)
-    try {
-      const res = await getDashboardResumo()
-      setResumo(res)
-    } catch (err) {
-      console.error("Erro ao carregar categorias:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   // --- Lógica de Filtros ---
   const todasTransacoes = [...(resumo?.transacoesEu || []), ...(resumo?.transacoesDela || [])]
@@ -70,7 +60,8 @@ export default function Categorias() {
     .sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor))
     .slice(0, 5)
 
-  if (loading) return <Spinner />
+  // 3. O Spinner agora depende apenas do isLoading do React Query
+  if (isLoading) return <Spinner />
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-fade-up pb-10 tracking-tight">
@@ -78,7 +69,7 @@ export default function Categorias() {
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h2 className="text-3xl font-black text-slate-900 italic tracking-tighter uppercase">
-            Categorias <span className="text-primary font-black">Análise</span>
+            Categorias <span className="text-indigo-600 font-black">Análise</span>
           </h2>
           <p className="text-slate-500 font-bold text-[10px] uppercase tracking-widest italic">Mapeamento Inteligente de Gastos</p>
         </div>
@@ -127,10 +118,9 @@ export default function Categorias() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* GRÁFICO DE CATEGORIAS */}
         <div className="lg:col-span-7 bg-white border border-slate-200 rounded-[24px] p-8 shadow-xl">
           <h3 className="text-lg font-black text-slate-900 uppercase italic flex items-center gap-3 mb-8">
-            <BarChart className="text-primary" /> Gastos por Categoria
+            <BarChart className="text-indigo-600" /> Gastos por Categoria
           </h3>
           <div className="space-y-6">
             {resumoCategorias.map((item) => {
@@ -165,7 +155,6 @@ export default function Categorias() {
           </div>
         </div>
 
-        {/* TOP 5 E DISTRIBUIÇÃO */}
         <div className="lg:col-span-5 space-y-8">
           <div className="bg-white border border-slate-200 rounded-[24px] p-8 shadow-xl">
             <h3 className="text-sm font-black text-rose-500 uppercase italic flex items-center gap-3 mb-6">
@@ -210,7 +199,6 @@ export default function Categorias() {
         </div>
       </div>
 
-      {/* TABELA */}
       <div className="bg-white border border-slate-200 rounded-[24px] p-8 shadow-xl overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <h3 className="text-lg font-black text-slate-900 uppercase italic flex items-center gap-3">
