@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MinhaVidaAPI.Data;
-using MinhaVidaAPI.Models;
 
 namespace MinhaVidaAPI.Controllers
 {

@@ -10,7 +10,7 @@ namespace MinhaVidaAPI.Models
         [Required]
         public string Descricao { get; set; } = string.Empty;
 
-        public decimal Valor { get; set; }
+        public double Valor { get; set; }
 
         public DateTime Data { get; set; } = DateTime.Now;
 
@@ -19,7 +19,7 @@ namespace MinhaVidaAPI.Models
 
         public string Categoria { get; set; } = "Geral";
         public string Tipo { get; set; } = "Saída"; // "Entrada" ou "Saída"
-        
+
         public bool EhPessoal { get; set; } = false;
 
     }

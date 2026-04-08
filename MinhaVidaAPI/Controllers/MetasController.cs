@@ -28,7 +28,7 @@ namespace MinhaVidaAPI.Controllers
         [HttpPost]
         public async Task<ActionResult<Meta>> PostMeta(Meta meta)
         {
-            _context.Metas.Add(meta);
+            _context.Metas.Update(meta);
             await _context.SaveChangesAsync();
 
             // Notifica o casal que um novo plano começou!

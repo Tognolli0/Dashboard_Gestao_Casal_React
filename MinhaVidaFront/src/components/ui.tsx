@@ -157,8 +157,13 @@ export function Select({
         </select>
         {/* Seta customizada para o Select */}
         <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-400">
-          <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20 font-black"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
-        </div>
+  <svg 
+    className="w-4 h-4 fill-current font-black" 
+    viewBox="0 0 20 20"
+  >
+    <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+  </svg>
+</div>
       </div>
     </label>
   )
