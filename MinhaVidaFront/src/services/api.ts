@@ -5,7 +5,7 @@ import type { Transacao, Meta, Desejo, DashboardResumo } from '../types/models';
 const api = axios.create({
   // A URL que aparece na sua imagem do terminal
   baseURL: 'https://minhavidaapi.onrender.com',
-  timeout: 60000,
+  timeout: 120000,
 })
 
 // Funções para buscar os dados

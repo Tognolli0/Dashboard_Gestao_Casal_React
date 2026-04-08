@@ -6,12 +6,13 @@ using MinhaVidaAPI.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. BANCO DE DADOS
+// 1. CONFIGURAÇÃO DE SERVIÇOS (O que a API "sabe" fazer)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// 2. CONFIGURAÇÃO DE CORS (O que resolve o erro do Front)
+// Configuração do CORS - Definindo a política "Livre"
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Livre", policy =>
@@ -22,7 +23,6 @@ builder.Services.AddCors(options =>
     });
 });
 
-// 3. COMPRESSÃO E PERFORMANCE
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
@@ -30,38 +30,38 @@ builder.Services.AddResponseCompression(options =>
     options.Providers.Add<GzipCompressionProvider>();
 });
 
-// 4. SEUS SERVIÇOS CUSTOMIZADOS (WhatsApp, OCR, etc)
 builder.Services.AddScoped<WhatsAppService>();
 builder.Services.AddScoped<OCRService>();
 builder.Services.AddHttpClient();
 builder.Services.AddHostedService<ResumoWorker>();
 
-// 5. INFRAESTRUTURA API
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// --- PIPELINE DE EXECUÇÃO ---
+// 2. PIPELINE DE EXECUÇÃO (A ordem aqui IMPORTA MUITO)
 
-// IMPORTANTE: O CORS deve ser um dos primeiros para o navegador não barrar
+// O CORS DEVE ser a primeira coisa. 
+// Isso garante que mesmo em erro ou lentidão, o Header de permissão seja enviado.
 app.UseCors("Livre");
 
-// Swagger sempre ativo para facilitar seu debug no Render
+// Swagger configurado para aparecer em Produção (Render) para testes
 app.UseSwagger();
-app.UseSwaggerUI();
+app.UseSwaggerUI(c => {
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Minha Vida API v1");
+    c.RoutePrefix = "swagger"; // Swagger disponível em /swagger
+});
 
 app.UseResponseCompression();
 
-// Desabilitado para o Render gerenciar o certificado SSL sozinho
-// app.UseHttpsRedirection();
-
+// UseAuthorization deve vir depois do CORS
 app.UseAuthorization();
 
 app.MapControllers();
 
-// Rota de teste para saber se a API está viva
-app.MapGet("/", () => "API Always Together - Online 🚀");
+// Rota para testar se a API está acordada sem precisar de banco
+app.MapGet("/", () => "API Always Together - Online e Autorizada 🚀");
 
 app.Run();
