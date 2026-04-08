@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.ResponseCompression;
-using Microsoft.EntityFrameworkCore;
 using MinhaVidaAPI.Data;
 using MinhaVidaAPI.Services;
 using MinhaVidaAPI.Workers;
@@ -44,7 +43,7 @@ app.UseCors("Livre");
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseResponseCompression();
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 
