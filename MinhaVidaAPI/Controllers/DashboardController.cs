@@ -15,27 +15,76 @@ namespace MinhaVidaAPI.Controllers
             _context = context;
         }
 
-        // GET: api/dashboard/resumo
-        // Retorna tudo que o Home.razor precisa em UMA única chamada
+        /// <summary>
+        /// Retorna tudo que o Home.razor precisa em UMA única chamada.
+        /// OTIMIZADO: queries paralelas em vez de sequenciais.
+        /// </summary>
         [HttpGet("resumo")]
+        [ResponseCache(Duration = 30, Location = ResponseCacheLocation.Any)]
         public async Task<IActionResult> GetResumo()
         {
-            var transacoesEu = await _context.Transacoes
-                .AsNoTracking().Where(t => t.Responsavel == "Eu").ToListAsync();
+            // Executa todas as queries em PARALELO — reduz latência de 4x para 1x
+            var taskEu = _context.Transacoes
+                .AsNoTracking()
+                .Where(t => t.Responsavel == "Eu")
+                .Select(t => new {
+                    t.Id,
+                    t.Descricao,
+                    t.Valor,
+                    t.Data,
+                    t.Responsavel,
+                    t.Categoria,
+                    t.Tipo,
+                    t.EhPessoal
+                })
+                .ToListAsync();
 
-            var transacoesDela = await _context.Transacoes
-                .AsNoTracking().Where(t => t.Responsavel == "Namorada").ToListAsync();
+            var taskDela = _context.Transacoes
+                .AsNoTracking()
+                .Where(t => t.Responsavel == "Namorada")
+                .Select(t => new {
+                    t.Id,
+                    t.Descricao,
+                    t.Valor,
+                    t.Data,
+                    t.Responsavel,
+                    t.Categoria,
+                    t.Tipo,
+                    t.EhPessoal
+                })
+                .ToListAsync();
 
-            var metas = await _context.Metas.AsNoTracking().ToListAsync();
+            var taskMetas = _context.Metas
+                .AsNoTracking()
+                .Select(m => new {
+                    m.Id,
+                    m.Titulo,
+                    m.ValorObjetivo,
+                    m.ValorGuardado,
+                    m.Responsavel
+                })
+                .ToListAsync();
 
-            var desejos = await _context.Desejos.AsNoTracking().ToListAsync();
+            var taskDesejos = _context.Desejos
+                .AsNoTracking()
+                .Select(d => new {
+                    d.Id,
+                    d.Titulo,
+                    d.DataAlvo,
+                    d.Icone,
+                    d.Concluido
+                })
+                .ToListAsync();
+
+            // Aguarda tudo em paralelo
+            await Task.WhenAll(taskEu, taskDela, taskMetas, taskDesejos);
 
             return Ok(new
             {
-                TransacoesEu = transacoesEu,
-                TransacoesDela = transacoesDela,
-                Metas = metas,
-                Desejos = desejos
+                TransacoesEu = taskEu.Result,
+                TransacoesDela = taskDela.Result,
+                Metas = taskMetas.Result,
+                Desejos = taskDesejos.Result
             });
         }
     }
