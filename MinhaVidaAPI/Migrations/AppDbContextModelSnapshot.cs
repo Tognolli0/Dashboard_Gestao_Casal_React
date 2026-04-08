@@ -106,8 +106,8 @@ namespace MinhaVidaAPI.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<decimal>("Valor")
-                        .HasColumnType("numeric");
+                    b.Property<double>("Valor")
+                        .HasColumnType("double precision");
 
                     b.HasKey("Id");
 

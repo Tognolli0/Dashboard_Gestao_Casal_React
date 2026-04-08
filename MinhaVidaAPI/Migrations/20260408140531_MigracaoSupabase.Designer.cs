@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MinhaVidaAPI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260407205655_AtualizacaoGeralSupabase")]
-    partial class AtualizacaoGeralSupabase
+    [Migration("20260408140531_MigracaoSupabase")]
+    partial class MigracaoSupabase
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -109,8 +109,8 @@ namespace MinhaVidaAPI.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<decimal>("Valor")
-                        .HasColumnType("numeric");
+                    b.Property<double>("Valor")
+                        .HasColumnType("double precision");
 
                     b.HasKey("Id");
 
