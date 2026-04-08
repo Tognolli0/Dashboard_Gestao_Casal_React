@@ -6,14 +6,12 @@ using MinhaVidaAPI.Workers;
 var builder = WebApplication.CreateBuilder(args);
 
 // Força a leitura da string de conexão
+// Pegamos a string de conexão
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-// CONFIGURAÇÃO ÚNICA: Apenas PostgreSQL
+// Usando o nome completo do método para o editor não apagar o using
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString, npgsqlOptions =>
-    {
-        npgsqlOptions.EnableRetryOnFailure(5); // Tenta reconectar se o Supabase demorar
-    }));
+    Microsoft.EntityFrameworkCore.NpgsqlDbContextOptionsBuilderExtensions.UseNpgsql(options, connectionString));
 
 builder.Services.AddResponseCompression(options =>
 {
