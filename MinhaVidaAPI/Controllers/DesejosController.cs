@@ -1,7 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using MinhaVidaAPI.Data;
 using MinhaVidaAPI.Models;
+using MinhaVidaAPI.Services;
 
 namespace MinhaVidaAPI.Controllers
 {
@@ -10,13 +12,16 @@ namespace MinhaVidaAPI.Controllers
     public class DesejosController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IMemoryCache _cache;
 
-        public DesejosController(AppDbContext context)
+        public DesejosController(AppDbContext context, IMemoryCache cache)
         {
             _context = context;
+            _cache = cache;
         }
 
         [HttpGet]
+        [ResponseCache(Duration = 30, Location = ResponseCacheLocation.Any)]
         public async Task<ActionResult<IEnumerable<Desejo>>> GetDesejos()
         {
             return await _context.Desejos.AsNoTracking().ToListAsync();
@@ -33,10 +38,8 @@ namespace MinhaVidaAPI.Controllers
         [HttpPost]
         public async Task<ActionResult<Desejo>> PostDesejo(Desejo desejo)
         {
-            // Garante novo ID
             desejo.Id = 0;
 
-            // Normaliza timezone: PostgreSQL precisa de UTC
             if (desejo.DataAlvo.Kind == DateTimeKind.Unspecified)
                 desejo.DataAlvo = DateTime.SpecifyKind(desejo.DataAlvo, DateTimeKind.Utc);
             else
@@ -44,6 +47,7 @@ namespace MinhaVidaAPI.Controllers
 
             _context.Desejos.Add(desejo);
             await _context.SaveChangesAsync();
+            InvalidateDashboardCache();
 
             return CreatedAtAction(nameof(GetDesejo), new { id = desejo.Id }, desejo);
         }
@@ -63,11 +67,12 @@ namespace MinhaVidaAPI.Controllers
             try
             {
                 await _context.SaveChangesAsync();
+                InvalidateDashboardCache();
             }
             catch (DbUpdateConcurrencyException)
             {
                 if (!_context.Desejos.Any(e => e.Id == id)) return NotFound();
-                else throw;
+                throw;
             }
 
             return NoContent();
@@ -81,8 +86,14 @@ namespace MinhaVidaAPI.Controllers
 
             _context.Desejos.Remove(desejo);
             await _context.SaveChangesAsync();
+            InvalidateDashboardCache();
 
             return NoContent();
+        }
+
+        private void InvalidateDashboardCache()
+        {
+            _cache.Remove(CacheKeys.DashboardResumo);
         }
     }
 }

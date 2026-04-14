@@ -1,5 +1,6 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using MinhaVidaAPI.Data;
 using MinhaVidaAPI.Models;
 using MinhaVidaAPI.Services;
@@ -12,40 +13,41 @@ namespace MinhaVidaAPI.Controllers
     {
         private readonly AppDbContext _context;
         private readonly WhatsAppService _waService;
+        private readonly IMemoryCache _cache;
 
-        public MetasController(AppDbContext context, WhatsAppService waService)
+        public MetasController(AppDbContext context, WhatsAppService waService, IMemoryCache cache)
         {
             _context = context;
             _waService = waService;
+            _cache = cache;
         }
 
         [HttpGet]
+        [ResponseCache(Duration = 30, Location = ResponseCacheLocation.Any)]
         public async Task<ActionResult<IEnumerable<Meta>>> GetMetas()
         {
             return await _context.Metas.AsNoTracking().ToListAsync();
         }
 
-        // POST: cria uma nova meta — CORRIGIDO: era Update, agora é Add
         [HttpPost]
         public async Task<ActionResult<Meta>> PostMeta(Meta meta)
         {
-            // Garante que o ID é 0 para que o banco gere um novo
             meta.Id = 0;
 
             _context.Metas.Add(meta);
             await _context.SaveChangesAsync();
+            InvalidateDashboardCache();
 
             try
             {
                 await _waService.EnviarMensagemParaCasal(
-                    $"✨ *NOVO SONHO LANÇADO!* ✨\n\n" +
-                    $"Meta cadastrada: *{meta.Titulo}* 🎯\n" +
+                    $"NOVA META\n\n" +
+                    $"Meta cadastrada: *{meta.Titulo}*\n" +
                     $"Objetivo: {meta.ValorObjetivo:C}\n" +
-                    $"_Bora conquistar mais essa juntos!_ ❤️");
+                    $"Bora conquistar mais essa juntos.");
             }
             catch
             {
-                // WhatsApp nunca deve derrubar o endpoint principal
             }
 
             return CreatedAtAction(nameof(GetMeta), new { id = meta.Id }, meta);
@@ -69,23 +71,26 @@ namespace MinhaVidaAPI.Controllers
             try
             {
                 await _context.SaveChangesAsync();
+                InvalidateDashboardCache();
 
                 if (meta.ValorGuardado >= meta.ValorObjetivo)
                 {
                     try
                     {
                         await _waService.EnviarMensagemParaCasal(
-                            $"🎊 *META ATINGIDA!* 🎊\n\n" +
-                            $"Conseguimos completar: *{meta.Titulo}*! ✅\n" +
-                            $"Orgulho de nós! ❤️🚀");
+                            $"META ATINGIDA\n\n" +
+                            $"Conseguimos completar: *{meta.Titulo}*!\n" +
+                            $"Orgulho de nos.");
                     }
-                    catch { }
+                    catch
+                    {
+                    }
                 }
             }
             catch (DbUpdateConcurrencyException)
             {
                 if (!_context.Metas.Any(e => e.Id == id)) return NotFound();
-                else throw;
+                throw;
             }
 
             return NoContent();
@@ -99,6 +104,7 @@ namespace MinhaVidaAPI.Controllers
 
             _context.Metas.Remove(meta);
             await _context.SaveChangesAsync();
+            InvalidateDashboardCache();
 
             return NoContent();
         }
@@ -111,20 +117,28 @@ namespace MinhaVidaAPI.Controllers
 
             meta.ValorGuardado += valorAporte;
             await _context.SaveChangesAsync();
+            InvalidateDashboardCache();
 
             try
             {
                 await _waService.EnviarMensagemParaCasal(
-                    $"💰 *NOVO APORTE!*\n\n" +
-                    $"Somamos *{valorAporte:C}* na meta: *{meta.Titulo}*! 🚀\n" +
+                    $"NOVO APORTE\n\n" +
+                    $"Somamos *{valorAporte:C}* na meta: *{meta.Titulo}*!\n" +
                     $"Total guardado: {meta.ValorGuardado:C} ({meta.Porcentagem:F1}%)");
 
                 if (meta.ValorGuardado >= meta.ValorObjetivo)
-                    await _waService.EnviarMensagemParaCasal("🎊 *META ATINGIDA COM ESSE APORTE!* ✅");
+                    await _waService.EnviarMensagemParaCasal("META ATINGIDA COM ESSE APORTE");
             }
-            catch { }
+            catch
+            {
+            }
 
             return Ok(meta);
+        }
+
+        private void InvalidateDashboardCache()
+        {
+            _cache.Remove(CacheKeys.DashboardResumo);
         }
     }
 }

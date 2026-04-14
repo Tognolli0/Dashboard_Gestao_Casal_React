@@ -1,245 +1,224 @@
-import { useState } from 'react'
-import { 
-  PieChart, BarChart, TrendingUp, Search, 
-  ArrowUpCircle, ArrowDownCircle,
-  Calendar, Briefcase, Home as HomeIcon
-} from 'lucide-react'
-// 1. Importação do hook de cache
+﻿import { useState } from 'react'
+import { BarChart, Briefcase, Calendar, Home as HomeIcon, PieChart, Search, TrendingUp } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { getDashboardResumo } from '../services/api'
+import { combineTransactions, sortTransactionsByDateDesc } from '../lib/dashboard'
+import { DASHBOARD_QUERY_KEY } from '../lib/queryClient'
 import { Badge, Spinner, fmt } from '../components/ui'
 
 export default function Categorias() {
-  // 2. Configuração do Cache com useQuery
   const { data: resumo, isLoading } = useQuery({
-    queryKey: ['dashboard-resumo'],
+    queryKey: DASHBOARD_QUERY_KEY,
     queryFn: getDashboardResumo,
-    staleTime: 1000 * 60 * 5, // Mantém os dados "frescos" por 5 minutos
   })
 
   const [mesSelecionado, setMesSelecionado] = useState(new Date().getMonth() + 1)
   const [pessoaSelecionada, setPessoaSelecionada] = useState<'Todos' | 'Eu' | 'Namorada'>('Todos')
   const [filtroTexto, setFiltroTexto] = useState('')
 
-  // --- Lógica de Filtros ---
-  const todasTransacoes = [...(resumo?.transacoesEu || []), ...(resumo?.transacoesDela || [])]
-  
-  const transacoesMes = todasTransacoes.filter(t => {
-    const data = new Date(t.data)
-    const mesBate = (data.getMonth() + 1) === mesSelecionado
-    const pessoaBate = pessoaSelecionada === 'Todos' || t.responsavel === (pessoaSelecionada === 'Eu' ? 'Eu' : 'Namorada')
+  const todasTransacoes = combineTransactions(resumo)
+  const transacoesMes = todasTransacoes.filter((transaction) => {
+    const data = new Date(transaction.data)
+    const mesBate = data.getMonth() + 1 === mesSelecionado
+    const pessoaBate = pessoaSelecionada === 'Todos' || transaction.responsavel === pessoaSelecionada
     return mesBate && pessoaBate
   })
 
-  const transacoesFiltradas = transacoesMes.filter(t => 
-    t.descricao.toLowerCase().includes(filtroTexto.toLowerCase()) ||
-    t.categoria.toLowerCase().includes(filtroTexto.toLowerCase())
-  ).sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
+  const termoBusca = filtroTexto.trim().toLowerCase()
+  const transacoesFiltradas = sortTransactionsByDateDesc(
+    transacoesMes.filter((transaction) =>
+      transaction.descricao.toLowerCase().includes(termoBusca) ||
+      transaction.categoria.toLowerCase().includes(termoBusca),
+    ),
+  )
 
-  // --- KPIs ---
-  const totalSaidas = transacoesMes.filter(t => t.tipo === 'Saída').reduce((acc, t) => acc + Math.abs(t.valor), 0)
-  const totalEntradas = transacoesMes.filter(t => t.tipo === 'Entrada').reduce((acc, t) => acc + t.valor, 0)
+  const totalSaidas = transacoesMes.filter((transaction) => transaction.tipo === 'Saída').reduce((acc, transaction) => acc + Math.abs(transaction.valor), 0)
+  const totalEntradas = transacoesMes.filter((transaction) => transaction.tipo === 'Entrada').reduce((acc, transaction) => acc + transaction.valor, 0)
   const saldoLiquido = totalEntradas - totalSaidas
 
-  const gastosPessoais = transacoesMes.filter(t => t.tipo === 'Saída' && t.ehPessoal).reduce((acc, t) => acc + Math.abs(t.valor), 0)
-  const gastosBusiness = transacoesMes.filter(t => t.tipo === 'Saída' && !t.ehPessoal).reduce((acc, t) => acc + Math.abs(t.valor), 0)
+  const gastosPessoais = transacoesMes.filter((transaction) => transaction.tipo === 'Saída' && transaction.ehPessoal).reduce((acc, transaction) => acc + Math.abs(transaction.valor), 0)
+  const gastosBusiness = transacoesMes.filter((transaction) => transaction.tipo === 'Saída' && !transaction.ehPessoal).reduce((acc, transaction) => acc + Math.abs(transaction.valor), 0)
 
-  // --- Agrupamento por Categoria ---
   const resumoCategorias = Array.from(
-    transacoesMes.filter(t => t.tipo === 'Saída')
-      .reduce((acc, t) => {
-        const curr = acc.get(t.categoria) || { total: 0, qtd: 0 }
-        acc.set(t.categoria, { total: curr.total + Math.abs(t.valor), qtd: curr.qtd + 1 })
+    transacoesMes
+      .filter((transaction) => transaction.tipo === 'Saída')
+      .reduce((acc, transaction) => {
+        const atual = acc.get(transaction.categoria) || { total: 0, qtd: 0 }
+        acc.set(transaction.categoria, { total: atual.total + Math.abs(transaction.valor), qtd: atual.qtd + 1 })
         return acc
-      }, new Map<string, { total: number, qtd: number }>())
-  ).map(([nome, dados]) => ({ nome, ...dados }))
-   .sort((a, b) => b.total - a.total)
+      }, new Map<string, { total: number; qtd: number }>()),
+  )
+    .map(([nome, dados]) => ({ nome, ...dados }))
+    .sort((a, b) => b.total - a.total)
 
   const top5Gastos = transacoesMes
-    .filter(t => t.tipo === 'Saída')
+    .filter((transaction) => transaction.tipo === 'Saída')
     .sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor))
     .slice(0, 5)
 
-  // 3. O Spinner agora depende apenas do isLoading do React Query
   if (isLoading) return <Spinner />
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-fade-up pb-10 tracking-tight">
-      {/* HEADER */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div className="mx-auto max-w-6xl space-y-8 pb-10 tracking-tight animate-fade-up">
+      <header className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
         <div>
-          <h2 className="text-3xl font-black text-slate-900 italic tracking-tighter uppercase">
-            Categorias <span className="text-indigo-600 font-black">Análise</span>
+          <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900">
+            Categorias <span className="font-black text-indigo-600">Analise</span>
           </h2>
-          <p className="text-slate-500 font-bold text-[10px] uppercase tracking-widest italic">Mapeamento Inteligente de Gastos</p>
+          <p className="text-[10px] font-bold uppercase italic tracking-widest text-slate-500">Mapeamento Inteligente de Gastos</p>
         </div>
 
-        <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 w-fit shadow-inner gap-2">
-          <select 
-            value={mesSelecionado} 
-            onChange={(e) => setMesSelecionado(Number(e.target.value))}
-            className="bg-white border-none rounded-xl px-4 py-2 text-[10px] font-black uppercase shadow-sm focus:ring-2 ring-primary/20 cursor-pointer"
+        <div className="flex w-fit gap-2 rounded-2xl border border-slate-200 bg-slate-100 p-1.5 shadow-inner">
+          <select
+            value={mesSelecionado}
+            onChange={(event) => setMesSelecionado(Number(event.target.value))}
+            className="cursor-pointer rounded-xl border-none bg-white px-4 py-2 text-[10px] font-black uppercase shadow-sm"
           >
-            {Array.from({ length: 12 }, (_, i) => (
-              <option key={i + 1} value={i + 1}>
-                {new Date(2000, i, 1).toLocaleString('pt-BR', { month: 'long' }).toUpperCase()}
+            {Array.from({ length: 12 }, (_, index) => (
+              <option key={index + 1} value={index + 1}>
+                {new Date(2000, index, 1).toLocaleString('pt-BR', { month: 'long' }).toUpperCase()}
               </option>
             ))}
           </select>
 
-          <select 
-            value={pessoaSelecionada} 
-            onChange={(e) => setPessoaSelecionada(e.target.value as any)}
-            className="bg-white border-none rounded-xl px-4 py-2 text-[10px] font-black uppercase shadow-sm focus:ring-2 ring-primary/20 cursor-pointer"
+          <select
+            value={pessoaSelecionada}
+            onChange={(event) => setPessoaSelecionada(event.target.value as 'Todos' | 'Eu' | 'Namorada')}
+            className="cursor-pointer rounded-xl border-none bg-white px-4 py-2 text-[10px] font-black uppercase shadow-sm"
           >
-            <option value="Todos">👫 AMBOS</option>
-            <option value="Eu">👤 DIOGO</option>
-            <option value="Namorada">💖 BIA</option>
+            <option value="Todos">AMBOS</option>
+            <option value="Eu">DIOGO</option>
+            <option value="Namorada">BIA</option>
           </select>
         </div>
       </header>
 
-      {/* CARDS DE KPI */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white border border-slate-200 border-l-4 border-l-rose-500 rounded-2xl p-6 shadow-sm">
-          <p className="text-[10px] font-black uppercase text-rose-500 mb-1 tracking-widest">Saídas do Mês</p>
-          <p className="text-3xl font-black text-slate-950 tracking-tighter italic">{fmt(totalSaidas)}</p>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 border-l-4 border-l-rose-500 bg-white p-6 shadow-sm">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-rose-500">Saidas do Mes</p>
+          <p className="text-3xl font-black italic tracking-tighter text-slate-950">{fmt(totalSaidas)}</p>
         </div>
-        <div className="bg-white border border-slate-200 border-l-4 border-l-emerald-500 rounded-2xl p-6 shadow-sm">
-          <p className="text-[10px] font-black uppercase text-emerald-500 mb-1 tracking-widest">Entradas do Mês</p>
-          <p className="text-3xl font-black text-slate-950 tracking-tighter italic">{fmt(totalEntradas)}</p>
+        <div className="rounded-2xl border border-slate-200 border-l-4 border-l-emerald-500 bg-white p-6 shadow-sm">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-emerald-500">Entradas do Mes</p>
+          <p className="text-3xl font-black italic tracking-tighter text-slate-950">{fmt(totalEntradas)}</p>
         </div>
-        <div className={`bg-white border border-slate-200 border-l-4 rounded-2xl p-6 shadow-sm ${saldoLiquido >= 0 ? 'border-l-indigo-500' : 'border-l-amber-500'}`}>
-          <p className="text-[10px] font-black uppercase text-slate-500 mb-1 tracking-widest">Saldo Líquido</p>
-          <p className={`text-3xl font-black tracking-tighter italic ${saldoLiquido >= 0 ? 'text-indigo-600' : 'text-amber-600'}`}>
+        <div className={`rounded-2xl border border-slate-200 border-l-4 bg-white p-6 shadow-sm ${saldoLiquido >= 0 ? 'border-l-indigo-500' : 'border-l-amber-500'}`}>
+          <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Saldo Liquido</p>
+          <p className={`text-3xl font-black italic tracking-tighter ${saldoLiquido >= 0 ? 'text-indigo-600' : 'text-amber-600'}`}>
             {fmt(saldoLiquido)}
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-[24px] p-8 shadow-xl">
-          <h3 className="text-lg font-black text-slate-900 uppercase italic flex items-center gap-3 mb-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+        <div className="rounded-[24px] border border-slate-200 bg-white p-8 shadow-xl lg:col-span-7">
+          <h3 className="mb-8 flex items-center gap-3 text-lg font-black uppercase italic text-slate-900">
             <BarChart className="text-indigo-600" /> Gastos por Categoria
           </h3>
           <div className="space-y-6">
             {resumoCategorias.map((item) => {
-              const porcentagem = totalSaidas > 0 ? (item.total / totalSaidas) * 100 : 0;
-              const cor = getCor(item.nome);
+              const porcentagem = totalSaidas > 0 ? (item.total / totalSaidas) * 100 : 0
+              const cor = getCor(item.nome)
               return (
                 <div key={item.nome} className="group">
-                  <div className="flex justify-between items-center mb-2">
+                  <div className="mb-2 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-xl" style={{ backgroundColor: `${cor}15` }}>
+                      <div className="rounded-xl p-2" style={{ backgroundColor: `${cor}15` }}>
                         <PieChart size={16} style={{ color: cor }} />
                       </div>
                       <div>
-                        <p className="text-xs font-black text-slate-900 uppercase">{item.nome}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">{item.qtd} lançamentos</p>
+                        <p className="text-xs font-black uppercase text-slate-900">{item.nome}</p>
+                        <p className="text-[10px] font-bold uppercase text-slate-400">{item.qtd} lancamentos</p>
                       </div>
                     </div>
-                    <p className="text-sm font-black text-slate-900 italic">{fmt(item.total)}</p>
+                    <p className="text-sm font-black italic text-slate-900">{fmt(item.total)}</p>
                   </div>
-                  <div className="h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
-                    <div 
-                      className="h-full rounded-full transition-all duration-1000 shadow-sm"
-                      style={{ width: `${porcentagem}%`, backgroundColor: cor }}
-                    />
+                  <div className="h-3 overflow-hidden rounded-full border border-slate-200/50 bg-slate-100">
+                    <div className="h-full rounded-full shadow-sm transition-all duration-1000" style={{ width: `${porcentagem}%`, backgroundColor: cor }} />
                   </div>
-                  <p className="text-[10px] font-black text-slate-400 text-right mt-1 uppercase">
-                    {porcentagem.toFixed(1)}% da fatia
-                  </p>
+                  <p className="mt-1 text-right text-[10px] font-black uppercase text-slate-400">{porcentagem.toFixed(1)}% da fatia</p>
                 </div>
-              );
+              )
             })}
           </div>
         </div>
 
-        <div className="lg:col-span-5 space-y-8">
-          <div className="bg-white border border-slate-200 rounded-[24px] p-8 shadow-xl">
-            <h3 className="text-sm font-black text-rose-500 uppercase italic flex items-center gap-3 mb-6">
-              <TrendingUp /> Top 5 Críticos
+        <div className="space-y-8 lg:col-span-5">
+          <div className="rounded-[24px] border border-slate-200 bg-white p-8 shadow-xl">
+            <h3 className="mb-6 flex items-center gap-3 text-sm font-black uppercase italic text-rose-500">
+              <TrendingUp /> Top 5 Criticos
             </h3>
             <div className="space-y-5">
-              {top5Gastos.map((t, i) => (
-                <div key={t.id} className="flex items-center gap-4">
-                  <div 
-                    className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-white text-[10px] rotate-[-10deg] shadow-lg"
-                    style={{ backgroundColor: getCorRanking(i + 1) }}
-                  >
-                    #{i + 1}
+              {top5Gastos.map((transaction, index) => (
+                <div key={transaction.id} className="flex items-center gap-4">
+                  <div className="flex h-8 w-8 rotate-[-10deg] items-center justify-center rounded-xl text-[10px] font-black text-white shadow-lg" style={{ backgroundColor: getCorRanking(index + 1) }}>
+                    #{index + 1}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-black text-slate-900 uppercase truncate leading-tight">{t.descricao}</p>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase italic">{t.categoria}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-black uppercase leading-tight text-slate-900">{transaction.descricao}</p>
+                    <p className="text-[10px] font-bold uppercase italic text-slate-400">{transaction.categoria}</p>
                   </div>
-                  <p className="text-sm font-black text-rose-600 italic">{fmt(Math.abs(t.valor))}</p>
+                  <p className="text-sm font-black italic text-rose-600">{fmt(Math.abs(transaction.valor))}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-[24px] p-8 shadow-xl">
-            <h3 className="text-sm font-black text-slate-900 uppercase italic flex items-center gap-3 mb-6">
-              <Briefcase className="text-indigo-500" /> Fluxo de Saída
+          <div className="rounded-[24px] border border-slate-200 bg-white p-8 shadow-xl">
+            <h3 className="mb-6 flex items-center gap-3 text-sm font-black uppercase italic text-slate-900">
+              <Briefcase className="text-indigo-500" /> Fluxo de Saida
             </h3>
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 text-center">
-                <HomeIcon size={16} className="text-indigo-600 mx-auto mb-2" />
-                <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Pessoal</p>
-                <p className="text-xl font-black text-indigo-950 my-1">{fmt(gastosPessoais)}</p>
+              <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 text-center">
+                <HomeIcon size={16} className="mx-auto mb-2 text-indigo-600" />
+                <p className="text-[9px] font-black uppercase tracking-widest text-indigo-600">Pessoal</p>
+                <p className="my-1 text-xl font-black text-indigo-950">{fmt(gastosPessoais)}</p>
               </div>
-              <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100 text-center">
-                <Briefcase size={16} className="text-emerald-600 mx-auto mb-2" />
-                <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Business</p>
-                <p className="text-xl font-black text-emerald-950 my-1">{fmt(gastosBusiness)}</p>
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 text-center">
+                <Briefcase size={16} className="mx-auto mb-2 text-emerald-600" />
+                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Business</p>
+                <p className="my-1 text-xl font-black text-emerald-950">{fmt(gastosBusiness)}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-[24px] p-8 shadow-xl overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <h3 className="text-lg font-black text-slate-900 uppercase italic flex items-center gap-3">
-            <Calendar className="text-indigo-500" /> Lançamentos
+      <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white p-8 shadow-xl">
+        <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+          <h3 className="flex items-center gap-3 text-lg font-black uppercase italic text-slate-900">
+            <Calendar className="text-indigo-500" /> Lancamentos
           </h3>
           <div className="relative w-full md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input 
+            <input
               type="text"
               placeholder="BUSCAR..."
               value={filtroTexto}
-              onChange={(e) => setFiltroTexto(e.target.value)}
-              className="w-full bg-slate-100 border-none rounded-xl pl-10 pr-4 py-2 text-[10px] font-black uppercase shadow-inner"
+              onChange={(event) => setFiltroTexto(event.target.value)}
+              className="w-full rounded-xl border-none bg-slate-100 py-2 pl-10 pr-4 text-[10px] font-black uppercase shadow-inner"
             />
           </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            <thead className="border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
               <tr>
-                <th className="pb-4 px-4">Data</th>
-                <th className="pb-4 px-4">Descrição</th>
-                <th className="pb-4 px-4">Categoria</th>
-                <th className="pb-4 px-4 text-right">Valor</th>
+                <th className="px-4 pb-4">Data</th>
+                <th className="px-4 pb-4">Descricao</th>
+                <th className="px-4 pb-4">Categoria</th>
+                <th className="px-4 pb-4 text-right">Valor</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {transacoesFiltradas.map((t) => (
-                <tr key={t.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="py-4 px-4 text-[11px] font-bold text-slate-500">
-                    {new Date(t.data).toLocaleDateString('pt-BR')}
-                  </td>
-                  <td className="py-4 px-4 text-xs font-black text-slate-900 uppercase">
-                    {t.descricao}
-                  </td>
-                  <td className="py-4 px-4">
-                    <Badge label={t.categoria} color={getBadgeColor(t.categoria)} />
-                  </td>
-                  <td className={`py-4 px-4 text-right text-xs font-black italic ${t.tipo === 'Entrada' ? 'text-emerald-600' : 'text-slate-950'}`}>
-                    {t.tipo === 'Saída' ? `- ${fmt(Math.abs(t.valor))}` : fmt(t.valor)}
+              {transacoesFiltradas.map((transaction) => (
+                <tr key={transaction.id} className="transition-colors hover:bg-slate-50">
+                  <td className="px-4 py-4 text-[11px] font-bold text-slate-500">{new Date(transaction.data).toLocaleDateString('pt-BR')}</td>
+                  <td className="px-4 py-4 text-xs font-black uppercase text-slate-900">{transaction.descricao}</td>
+                  <td className="px-4 py-4"><Badge label={transaction.categoria} color={getBadgeColor(transaction.categoria)} /></td>
+                  <td className={`px-4 py-4 text-right text-xs font-black italic ${transaction.tipo === 'Entrada' ? 'text-emerald-600' : 'text-slate-950'}`}>
+                    {transaction.tipo === 'Saída' ? `- ${fmt(Math.abs(transaction.valor))}` : fmt(transaction.valor)}
                   </td>
                 </tr>
               ))}
@@ -251,24 +230,24 @@ export default function Categorias() {
   )
 }
 
-// --- Helpers Visuais ---
-function getCor(cat: string) {
+function getCor(categoria: string) {
   const cores: Record<string, string> = {
-    "Alimentação": "#e65100", "Transporte": "#1565c0", "Moradia": "#2e7d32",
-    "Saúde": "#c62828", "Educação": "#6a1b9a", "Lazer": "#f57f17",
-    "Vestuário": "#ad1457", "Investimento": "#00695c"
+    Alimentacao: '#e65100', Transporte: '#1565c0', Moradia: '#2e7d32',
+    Saude: '#c62828', Educacao: '#6a1b9a', Lazer: '#f57f17',
+    Vestuario: '#ad1457', Investimento: '#00695c',
   }
-  return cores[cat] || "#455a64"
+  return cores[categoria] || '#455a64'
 }
 
-function getBadgeColor(cat: string): any {
+function getBadgeColor(categoria: string) {
   const cores: Record<string, string> = {
-    "Alimentação": "amber", "Transporte": "indigo", "Moradia": "green",
-    "Saúde": "red", "Educação": "gray", "Lazer": "pink"
+    Alimentacao: 'amber', Transporte: 'indigo', Moradia: 'green',
+    Saude: 'red', Educacao: 'gray', Lazer: 'pink',
   }
-  return cores[cat] || "gray"
+  return cores[categoria] || 'gray'
 }
 
-function getCorRanking(pos: number) {
-  return ["#f44336", "#ff7043", "#ffa726", "#78909c", "#b0bec5"][pos-1] || "#b0bec5"
+function getCorRanking(posicao: number) {
+  return ['#f44336', '#ff7043', '#ffa726', '#78909c', '#b0bec5'][posicao - 1] || '#b0bec5'
 }
+

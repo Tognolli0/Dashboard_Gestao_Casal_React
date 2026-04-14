@@ -1,89 +1,89 @@
-import axios from 'axios';
-import type { Transacao, Meta, Desejo, DashboardResumo } from '../types/models';
+﻿import axios from 'axios'
+import type { DashboardResumo, Desejo, Meta, Transacao } from '../types/models'
+
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'https://minhavidaapi.onrender.com'
 
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL ?? 'https://minhavidaapi.onrender.com',
-    timeout: 120_000,
-    headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-    },
-});
+  baseURL: API_BASE_URL,
+  timeout: 20000,
+  headers: {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  },
+})
 
-// Retry automático no cold start do Render
 api.interceptors.response.use(
-    res => res,
-    async (error) => {
-        const config = error.config;
-        if (!config._retry && (error.code === 'ECONNABORTED' || error.response?.status === 503)) {
-            config._retry = true;
-            await new Promise(r => setTimeout(r, 3000));
-            return api(config);
-        }
-        console.error('[API]', error.response?.status, error.message);
-        return Promise.reject(error);
-    }
-);
+  (response) => response,
+  async (error) => {
+    const config = error.config
 
-let _warmed = false;
+    if (config && !config._retry && (error.code === 'ECONNABORTED' || error.response?.status === 502 || error.response?.status === 503)) {
+      config._retry = true
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+      return api(config)
+    }
+
+    return Promise.reject(error)
+  },
+)
+
+let warmupPromise: Promise<unknown> | null = null
+
 export function warmUpAPI() {
-    if (_warmed) return;
-    _warmed = true;
-    api.get('/').catch(() => { });
+  if (warmupPromise) return warmupPromise
+
+  warmupPromise = api.get('/healthz').catch(() => undefined)
+  return warmupPromise
 }
 
-// ── QUERIES ───────────────────────────────────────────────────────────────────
-
 export const getDashboardResumo = (): Promise<DashboardResumo> =>
-    api.get('/api/dashboard/resumo').then(r => r.data);
+  api.get('/api/dashboard/resumo').then((response) => response.data)
 
 export const getTransacoes = (responsavel: string): Promise<Transacao[]> =>
-    api.get(`/api/transacoes/${responsavel}`).then(r => r.data);
+  api.get(`/api/transacoes/${responsavel}`).then((response) => response.data)
 
 export const getMetas = (): Promise<Meta[]> =>
-    api.get('/api/metas').then(r => r.data);
+  api.get('/api/metas').then((response) => response.data)
 
 export const getDesejos = (): Promise<Desejo[]> =>
-    api.get('/api/desejos').then(r => r.data);
+  api.get('/api/desejos').then((response) => response.data)
 
-// ── MUTATIONS ─────────────────────────────────────────────────────────────────
-
-// Envia valor POSITIVO — o backend aplica o sinal correto baseado no campo Tipo
-export const postTransacao = (t: Partial<Transacao>): Promise<Transacao> =>
-    api.post('/api/transacoes', {
-        ...t,
-        id: 0,
-        valor: Math.abs(Number(t.valor)),
-        data: t.data ?? new Date().toISOString(),
-    }).then(r => r.data);
+export const postTransacao = (transacao: Partial<Transacao>): Promise<Transacao> =>
+  api.post('/api/transacoes', {
+    ...transacao,
+    id: 0,
+    valor: Math.abs(Number(transacao.valor)),
+    data: transacao.data ?? new Date().toISOString(),
+  }).then((response) => response.data)
 
 export const deleteTransacao = (id: number): Promise<void> =>
-    api.delete(`/api/transacoes/${id}`).then(() => undefined);
+  api.delete(`/api/transacoes/${id}`).then(() => undefined)
 
-export const postMeta = (m: Partial<Meta>): Promise<Meta> =>
-    api.post('/api/metas', { ...m, id: 0 }).then(r => r.data);
+export const postMeta = (meta: Partial<Meta>): Promise<Meta> =>
+  api.post('/api/metas', { ...meta, id: 0 }).then((response) => response.data)
 
-export const putMeta = (m: Meta): Promise<Meta> =>
-    api.put(`/api/metas/${m.id}`, m).then(r => r.data);
+export const putMeta = (meta: Meta): Promise<Meta> =>
+  api.put(`/api/metas/${meta.id}`, meta).then((response) => response.data)
 
 export const deleteMeta = (id: number): Promise<void> =>
-    api.delete(`/api/metas/${id}`).then(() => undefined);
+  api.delete(`/api/metas/${id}`).then(() => undefined)
 
 export const realizarAporte = (id: number, valor: number): Promise<Meta> =>
-    api.post(`/api/metas/${id}/aporte`, valor, {
-        headers: { 'Content-Type': 'application/json' },
-    }).then(r => r.data);
+  api.post(`/api/metas/${id}/aporte`, valor, {
+    headers: { 'Content-Type': 'application/json' },
+  }).then((response) => response.data)
 
-export const postDesejo = (d: Partial<Desejo>): Promise<Desejo> =>
-    api.post('/api/desejos', {
-        ...d,
-        id: 0,
-        dataAlvo: d.dataAlvo
-            ? new Date(d.dataAlvo).toISOString()
-            : new Date().toISOString(),
-    }).then(r => r.data);
+export const postDesejo = (desejo: Partial<Desejo>): Promise<Desejo> =>
+  api.post('/api/desejos', {
+    ...desejo,
+    id: 0,
+    dataAlvo: desejo.dataAlvo
+      ? new Date(desejo.dataAlvo).toISOString()
+      : new Date().toISOString(),
+  }).then((response) => response.data)
 
 export const deleteDesejo = (id: number): Promise<void> =>
-    api.delete(`/api/desejos/${id}`).then(() => undefined);
+  api.delete(`/api/desejos/${id}`).then(() => undefined)
 
-export default api;
+export default api
+

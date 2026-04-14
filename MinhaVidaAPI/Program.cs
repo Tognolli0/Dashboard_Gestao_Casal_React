@@ -9,10 +9,9 @@ using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── 1. BANCO DE DADOS ────────────────────────────────────────────────────────
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+builder.Services.AddDbContextPool<AppDbContext>(options =>
 {
     options.UseNpgsql(connectionString, npgsql =>
     {
@@ -20,21 +19,21 @@ builder.Services.AddDbContext<AppDbContext>(options =>
             maxRetryCount: 3,
             maxRetryDelay: TimeSpan.FromSeconds(5),
             errorCodesToAdd: null);
-        npgsql.CommandTimeout(30);
+        npgsql.CommandTimeout(15);
     });
 
     if (!builder.Environment.IsDevelopment())
+    {
         options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
+    }
 });
 
-// ── 2. CORS ──────────────────────────────────────────────────────────────────
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Livre", policy =>
         policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 });
 
-// ── 3. COMPRESSÃO ────────────────────────────────────────────────────────────
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
@@ -44,16 +43,14 @@ builder.Services.AddResponseCompression(options =>
         new[] { "application/json", "text/json" });
 });
 
-builder.Services.Configure<BrotliCompressionProviderOptions>(o =>
-    o.Level = CompressionLevel.Fastest);
-builder.Services.Configure<GzipCompressionProviderOptions>(o =>
-    o.Level = CompressionLevel.Fastest);
+builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
+    options.Level = CompressionLevel.Fastest);
+builder.Services.Configure<GzipCompressionProviderOptions>(options =>
+    options.Level = CompressionLevel.Fastest);
 
-// ── 4. CACHE ─────────────────────────────────────────────────────────────────
+builder.Services.AddMemoryCache();
 builder.Services.AddResponseCaching();
 
-// ── 5. CONTROLLERS com JSON camelCase ────────────────────────────────────────
-// CRÍTICO: sem isso, backend retorna "TransacoesEu" mas React espera "transacoesEu"
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -62,31 +59,29 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     });
 
-// ── 6. SERVIÇOS ──────────────────────────────────────────────────────────────
 builder.Services.AddScoped<WhatsAppService>();
 builder.Services.AddScoped<OCRService>();
 builder.Services.AddHttpClient();
-
-// ── 7. WORKERS ───────────────────────────────────────────────────────────────
 builder.Services.AddHostedService<ResumoWorker>();
-builder.Services.AddHostedService<KeepAliveWorker>();
 
-// ── 8. SWAGGER ───────────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// ── PIPELINE ─────────────────────────────────────────────────────────────────
 app.UseCors("Livre");
 app.UseResponseCompression();
 app.UseResponseCaching();
 
-app.UseSwagger();
-app.UseSwaggerUI(c => {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Minha Vida API v1");
-    c.RoutePrefix = "swagger";
-});
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Minha Vida API v1");
+        options.RoutePrefix = "swagger";
+    });
+}
 
 app.UseAuthorization();
 app.MapControllers();
@@ -95,13 +90,21 @@ app.MapGet("/", () => Results.Ok(new
 {
     status = "online",
     time = DateTime.UtcNow,
-    message = "API Always Together 🚀"
+    message = "API Always Together"
 }));
 
-// ── MIGRATE ON STARTUP ───────────────────────────────────────────────────────
-if (!app.Environment.IsDevelopment())
+app.MapGet("/healthz", () => Results.Ok(new
+{
+    status = "healthy",
+    time = DateTime.UtcNow
+}));
+
+var applyMigrationsOnStartup = builder.Configuration.GetValue("APPLY_MIGRATIONS_ON_STARTUP", false);
+
+if (!app.Environment.IsDevelopment() && applyMigrationsOnStartup)
 {
     using var scope = app.Services.CreateScope();
+
     try
     {
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

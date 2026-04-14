@@ -1,5 +1,6 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using MinhaVidaAPI.Data;
 using MinhaVidaAPI.Models;
 using MinhaVidaAPI.Services;
@@ -12,15 +13,17 @@ namespace MinhaVidaAPI.Controllers
     {
         private readonly AppDbContext _context;
         private readonly WhatsAppService _waService;
+        private readonly IMemoryCache _cache;
 
-        public TransacoesController(AppDbContext context, WhatsAppService waService)
+        public TransacoesController(AppDbContext context, WhatsAppService waService, IMemoryCache cache)
         {
             _context = context;
             _waService = waService;
+            _cache = cache;
         }
 
-        // GET: api/transacoes/{responsavel}
         [HttpGet("{responsavel}")]
+        [ResponseCache(Duration = 30, Location = ResponseCacheLocation.Any, VaryByHeader = "Accept-Encoding")]
         public async Task<ActionResult<IEnumerable<Transacao>>> GetTransacoes(string responsavel)
         {
             return await _context.Transacoes
@@ -30,20 +33,16 @@ namespace MinhaVidaAPI.Controllers
                 .ToListAsync();
         }
 
-        // POST: api/transacoes
         [HttpPost]
         public async Task<ActionResult<Transacao>> PostTransacao(Transacao transacao)
         {
-            // Garante novo ID
             transacao.Id = 0;
 
-            // Normaliza timezone para PostgreSQL
             if (transacao.Data.Kind == DateTimeKind.Unspecified)
                 transacao.Data = DateTime.SpecifyKind(transacao.Data, DateTimeKind.Utc);
             else
                 transacao.Data = transacao.Data.ToUniversalTime();
 
-            // Garante que saídas têm valor negativo e entradas positivo
             if (transacao.Tipo == "Saída")
                 transacao.Valor = -Math.Abs(transacao.Valor);
             else
@@ -51,11 +50,11 @@ namespace MinhaVidaAPI.Controllers
 
             _context.Transacoes.Add(transacao);
             await _context.SaveChangesAsync();
+            InvalidateDashboardCache();
 
             return Ok(transacao);
         }
 
-        // DELETE: api/transacoes/{id}
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteTransacao(int id)
         {
@@ -64,23 +63,23 @@ namespace MinhaVidaAPI.Controllers
 
             _context.Transacoes.Remove(transacao);
             await _context.SaveChangesAsync();
+            InvalidateDashboardCache();
             return NoContent();
         }
 
-        // GET: api/transacoes/totais
         [HttpGet("totais")]
+        [ResponseCache(Duration = 30, Location = ResponseCacheLocation.Any)]
         public async Task<IActionResult> GetTotais()
         {
-            var transacoes = await _context.Transacoes.AsNoTracking().ToListAsync();
             var resumo = new
             {
-                TotalMeu = transacoes.Where(t => t.Responsavel == "Eu").Sum(t => t.Valor),
-                TotalDela = transacoes.Where(t => t.Responsavel == "Namorada").Sum(t => t.Valor)
+                TotalMeu = await _context.Transacoes.Where(t => t.Responsavel == "Eu").SumAsync(t => t.Valor),
+                TotalDela = await _context.Transacoes.Where(t => t.Responsavel == "Namorada").SumAsync(t => t.Valor)
             };
+
             return Ok(resumo);
         }
 
-        // POST: api/transacoes/lote
         [HttpPost("lote")]
         public async Task<IActionResult> PostTransacoesLote([FromBody] List<Transacao> transacoes)
         {
@@ -89,23 +88,24 @@ namespace MinhaVidaAPI.Controllers
 
             try
             {
-                foreach (var t in transacoes)
+                foreach (var transacao in transacoes)
                 {
-                    t.Id = 0;
+                    transacao.Id = 0;
 
-                    if (t.Data.Kind == DateTimeKind.Unspecified)
-                        t.Data = DateTime.SpecifyKind(t.Data, DateTimeKind.Utc);
+                    if (transacao.Data.Kind == DateTimeKind.Unspecified)
+                        transacao.Data = DateTime.SpecifyKind(transacao.Data, DateTimeKind.Utc);
                     else
-                        t.Data = t.Data.ToUniversalTime();
+                        transacao.Data = transacao.Data.ToUniversalTime();
 
-                    if (t.Tipo == "Saída")
-                        t.Valor = -Math.Abs(t.Valor);
+                    if (transacao.Tipo == "Saída")
+                        transacao.Valor = -Math.Abs(transacao.Valor);
                     else
-                        t.Valor = Math.Abs(t.Valor);
+                        transacao.Valor = Math.Abs(transacao.Valor);
                 }
 
                 _context.Transacoes.AddRange(transacoes);
                 await _context.SaveChangesAsync();
+                InvalidateDashboardCache();
 
                 var entradas = transacoes.Where(t => t.Valor > 0).Sum(t => t.Valor);
                 var saidas = transacoes.Where(t => t.Valor < 0).Sum(t => t.Valor);
@@ -113,12 +113,14 @@ namespace MinhaVidaAPI.Controllers
                 try
                 {
                     await _waService.EnviarMensagemParaCasal(
-                        $"📊 *EXTRATO IMPORTADO!*\n\n" +
+                        $"EXTRATO IMPORTADO\n\n" +
                         $"Processamos *{transacoes.Count}* novas transações.\n" +
-                        $"💰 Ganhos: {entradas:C}\n" +
-                        $"💸 Gastos: {Math.Abs(saidas):C}");
+                        $"Ganhos: {entradas:C}\n" +
+                        $"Gastos: {Math.Abs(saidas):C}");
                 }
-                catch { }
+                catch
+                {
+                }
 
                 return Ok(new { mensagem = $"{transacoes.Count} transações importadas!" });
             }
@@ -130,5 +132,11 @@ namespace MinhaVidaAPI.Controllers
                 return StatusCode(500, $"Erro: {ex.Message}");
             }
         }
+
+        private void InvalidateDashboardCache()
+        {
+            _cache.Remove(CacheKeys.DashboardResumo);
+        }
     }
 }
+

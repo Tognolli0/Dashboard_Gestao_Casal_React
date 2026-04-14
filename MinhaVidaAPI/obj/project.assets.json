@@ -3370,11 +3370,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\pekus\\source\\repos\\Tognolli0\\Dashboard_Gestao_Casal_React\\MinhaVidaAPI\\MinhaVidaAPI.csproj",
+      "projectUniqueName": "C:\\Dashboard_Gestao_Casal_React-master\\MinhaVidaAPI\\MinhaVidaAPI.csproj",
       "projectName": "MinhaVidaAPI",
-      "projectPath": "C:\\Users\\pekus\\source\\repos\\Tognolli0\\Dashboard_Gestao_Casal_React\\MinhaVidaAPI\\MinhaVidaAPI.csproj",
+      "projectPath": "C:\\Dashboard_Gestao_Casal_React-master\\MinhaVidaAPI\\MinhaVidaAPI.csproj",
       "packagesPath": "C:\\Users\\pekus\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\pekus\\source\\repos\\Tognolli0\\Dashboard_Gestao_Casal_React\\MinhaVidaAPI\\obj\\",
+      "outputPath": "C:\\Dashboard_Gestao_Casal_React-master\\MinhaVidaAPI\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -3394,7 +3394,6 @@
       },
       "frameworks": {
         "net10.0": {
-          "framework": "net10.0",
           "targetAlias": "net10.0",
           "projectReferences": {}
         }
@@ -3413,7 +3412,6 @@
     },
     "frameworks": {
       "net10.0": {
-        "framework": "net10.0",
         "targetAlias": "net10.0",
         "dependencies": {
           "Azure.AI.Vision.ImageAnalysis": {

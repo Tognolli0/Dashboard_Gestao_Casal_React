@@ -1,6 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using MinhaVidaAPI.Data;
+using MinhaVidaAPI.Services;
 
 namespace MinhaVidaAPI.Controllers
 {
@@ -9,25 +11,28 @@ namespace MinhaVidaAPI.Controllers
     public class DashboardController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IMemoryCache _cache;
 
-        public DashboardController(AppDbContext context)
+        public DashboardController(AppDbContext context, IMemoryCache cache)
         {
             _context = context;
+            _cache = cache;
         }
 
-        /// <summary>
-        /// Retorna tudo que o Home.razor precisa em UMA única chamada.
-        /// OTIMIZADO: queries paralelas em vez de sequenciais.
-        /// </summary>
         [HttpGet("resumo")]
         [ResponseCache(Duration = 30, Location = ResponseCacheLocation.Any)]
         public async Task<IActionResult> GetResumo()
         {
-            // Executa todas as queries em PARALELO — reduz latência de 4x para 1x
-            var taskEu = _context.Transacoes
+            if (_cache.TryGetValue(CacheKeys.DashboardResumo, out object? cachedResumo) && cachedResumo is not null)
+            {
+                return Ok(cachedResumo);
+            }
+
+            var transacoes = await _context.Transacoes
                 .AsNoTracking()
-                .Where(t => t.Responsavel == "Eu")
-                .Select(t => new {
+                .OrderByDescending(t => t.Data)
+                .Select(t => new
+                {
                     t.Id,
                     t.Descricao,
                     t.Valor,
@@ -39,24 +44,10 @@ namespace MinhaVidaAPI.Controllers
                 })
                 .ToListAsync();
 
-            var taskDela = _context.Transacoes
+            var metas = await _context.Metas
                 .AsNoTracking()
-                .Where(t => t.Responsavel == "Namorada")
-                .Select(t => new {
-                    t.Id,
-                    t.Descricao,
-                    t.Valor,
-                    t.Data,
-                    t.Responsavel,
-                    t.Categoria,
-                    t.Tipo,
-                    t.EhPessoal
-                })
-                .ToListAsync();
-
-            var taskMetas = _context.Metas
-                .AsNoTracking()
-                .Select(m => new {
+                .Select(m => new
+                {
                     m.Id,
                     m.Titulo,
                     m.ValorObjetivo,
@@ -65,9 +56,11 @@ namespace MinhaVidaAPI.Controllers
                 })
                 .ToListAsync();
 
-            var taskDesejos = _context.Desejos
+            var desejos = await _context.Desejos
                 .AsNoTracking()
-                .Select(d => new {
+                .OrderBy(d => d.DataAlvo)
+                .Select(d => new
+                {
                     d.Id,
                     d.Titulo,
                     d.DataAlvo,
@@ -76,16 +69,17 @@ namespace MinhaVidaAPI.Controllers
                 })
                 .ToListAsync();
 
-            // Aguarda tudo em paralelo
-            await Task.WhenAll(taskEu, taskDela, taskMetas, taskDesejos);
-
-            return Ok(new
+            var resumo = new
             {
-                TransacoesEu = taskEu.Result,
-                TransacoesDela = taskDela.Result,
-                Metas = taskMetas.Result,
-                Desejos = taskDesejos.Result
-            });
+                TransacoesEu = transacoes.Where(t => t.Responsavel == "Eu").ToList(),
+                TransacoesDela = transacoes.Where(t => t.Responsavel == "Namorada").ToList(),
+                Metas = metas,
+                Desejos = desejos
+            };
+
+            _cache.Set(CacheKeys.DashboardResumo, resumo, TimeSpan.FromSeconds(20));
+
+            return Ok(resumo);
         }
     }
 }

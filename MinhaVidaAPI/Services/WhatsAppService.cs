@@ -1,5 +1,6 @@
 ﻿using Twilio;
 using Twilio.Rest.Api.V2010.Account;
+using Twilio.Types;
 
 namespace MinhaVidaAPI.Services
 {
@@ -18,21 +19,34 @@ namespace MinhaVidaAPI.Services
             var token = _config["Twilio:AuthToken"];
             var from = _config["Twilio:FromPhoneNumber"];
 
-            // Pega os dois números do appsettings
-            var numeros = new List<string>
+            if (string.IsNullOrWhiteSpace(sid) || string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(from))
+            {
+                return;
+            }
+
+            var numeros = new[]
             {
                 _config["Twilio:MeuNumero"],
-                _config["Twilio:NumeroDela"]
-            };
+                _config["Twilio:NumeroDela"],
+            }
+            .Where(numero => !string.IsNullOrWhiteSpace(numero))
+            .Cast<string>()
+            .Distinct()
+            .ToList();
+
+            if (numeros.Count == 0)
+            {
+                return;
+            }
 
             TwilioClient.Init(sid, token);
 
-            foreach (var numero in numeros.Where(n => !string.IsNullOrEmpty(n)))
+            foreach (var numero in numeros)
             {
                 await MessageResource.CreateAsync(
                     body: mensagem,
-                    from: new Twilio.Types.PhoneNumber(from),
-                    to: new Twilio.Types.PhoneNumber($"whatsapp:{numero}")
+                    from: new PhoneNumber(from),
+                    to: new PhoneNumber($"whatsapp:{numero}")
                 );
             }
         }
