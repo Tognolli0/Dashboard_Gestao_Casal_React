@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Dashboard_Gestao_Casal-master\\MinhaVidaAPI\\MinhaVidaAPI.csproj": {}
+    "C:\\Users\\pekus\\source\\repos\\Tognolli0\\Dashboard_Gestao_Casal_React\\MinhaVidaAPI\\MinhaVidaAPI.csproj": {}
   },
   "projects": {
-    "C:\\Dashboard_Gestao_Casal-master\\MinhaVidaAPI\\MinhaVidaAPI.csproj": {
+    "C:\\Users\\pekus\\source\\repos\\Tognolli0\\Dashboard_Gestao_Casal_React\\MinhaVidaAPI\\MinhaVidaAPI.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Dashboard_Gestao_Casal-master\\MinhaVidaAPI\\MinhaVidaAPI.csproj",
+        "projectUniqueName": "C:\\Users\\pekus\\source\\repos\\Tognolli0\\Dashboard_Gestao_Casal_React\\MinhaVidaAPI\\MinhaVidaAPI.csproj",
         "projectName": "MinhaVidaAPI",
-        "projectPath": "C:\\Dashboard_Gestao_Casal-master\\MinhaVidaAPI\\MinhaVidaAPI.csproj",
+        "projectPath": "C:\\Users\\pekus\\source\\repos\\Tognolli0\\Dashboard_Gestao_Casal_React\\MinhaVidaAPI\\MinhaVidaAPI.csproj",
         "packagesPath": "C:\\Users\\pekus\\.nuget\\packages\\",
-        "outputPath": "C:\\Dashboard_Gestao_Casal-master\\MinhaVidaAPI\\obj\\",
+        "outputPath": "C:\\Users\\pekus\\source\\repos\\Tognolli0\\Dashboard_Gestao_Casal_React\\MinhaVidaAPI\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
