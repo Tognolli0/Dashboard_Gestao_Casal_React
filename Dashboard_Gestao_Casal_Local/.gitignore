@@ -287,10 +287,6 @@ FakesAssemblies/
 # Node.js Tools for Visual Studio
 .ntvs_analysis.dat
 node_modules/
-[Bb]in/
-[Oo]bj/
-Dashboard_Gestao_Casal_Local/MinhaVidaAPI/appsettings.Local.json
-test-preview.png
 
 # Visual Studio 6 build log
 *.plg
