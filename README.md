@@ -21,6 +21,7 @@ Versao React do produto de gestao financeira pessoal, com dashboard, OCR de comp
 2. Ajuste a conexao do backend em `MinhaVidaAPI/appsettings.Development.json` ou User Secrets.
 3. Instale dependencias do frontend com `npm install`.
 4. Rode a API e depois o frontend.
+5. Use `MinhaVidaAPI/appsettings.Local.example.json` e `MinhaVidaFront/.env.example` como base para ambiente local.
 
 ## Seguranca
 

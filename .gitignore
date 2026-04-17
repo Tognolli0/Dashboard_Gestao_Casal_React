@@ -291,6 +291,7 @@ node_modules/
 [Bb]in/
 [Oo]bj/
 Dashboard_Gestao_Casal_Local/MinhaVidaAPI/appsettings.Local.json
+MinhaVidaAPI/appsettings.Local.json
 test-preview.png
 
 # Visual Studio 6 build log
