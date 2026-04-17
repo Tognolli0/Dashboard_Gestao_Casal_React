@@ -1,77 +1,33 @@
-💰 Dashboard Gestão Casal - MinhaVida v3.0
-Um ecossistema financeiro completo para casais e empreendedores, focado na separação inteligente de fluxos pessoais e empresariais. O sistema utiliza Inteligência Artificial (OCR) para automatizar o lançamento de gastos a partir de fotos de comprovantes.
+# Dashboard Gestao Casal React
 
-🌟 Diferenciais do Projeto
-Arquitetura Moderna: Frontend de alto desempenho em React integrado a uma robusta API ASP.NET Core.
+Versao React do produto de gestao financeira pessoal, com dashboard, OCR de comprovantes e separacao de fluxos pessoais e de negocio.
 
-IA com Azure Vision: Leitura automática de valor, data e descrição de comprovantes Pix e boletos via OCR.
+## Stack
 
-Gestão 4-em-1: Monitoramento de caixas distintos (Diogo Pessoal, Bia Pessoal, Pekus Consultoria, Secret Studio).
+- Frontend em React + Vite + Tailwind CSS
+- Backend em ASP.NET Core Web API
+- Persistencia com Entity Framework Core
+- OCR com Azure AI Vision
 
-Dashboards de Alto Contraste: Interface tecnológica com visão de Metas, Bucket List e Evolução Patrimonial.
+## Estrutura
 
-Cálculo Inteligente: Lógica que consolida entradas e saídas automaticamente, oferecendo saldo líquido em tempo real.
+- `MinhaVidaFront`: aplicacao React
+- `MinhaVidaAPI`: API principal
+- `Dashboard_Gestao_Casal_Local`: copia de trabalho antiga, mantida temporariamente para consolidacao
 
-🛠️ Tecnologias e Ferramentas
-Frontend
-Framework: React + Vite
+## Como rodar
 
-Estilização: Tailwind CSS (Alto Contraste)
+1. Configure credenciais apenas no ambiente local.
+2. Ajuste a conexao do backend em `MinhaVidaAPI/appsettings.Development.json` ou User Secrets.
+3. Instale dependencias do frontend com `npm install`.
+4. Rode a API e depois o frontend.
 
-Componentes: UI Customizada (Cards, StatCards, Modais)
+## Seguranca
 
-Ícones: Lucide React
+As credenciais reais foram removidas do repositorio.
+Nao armazene senhas, tokens ou chaves de servicos em arquivos versionados.
 
-Backend
-Framework: ASP.NET Core 8.0 (Web API)
+## Proximo passo recomendado
 
-Banco de Dados: SQLite (com suporte para migração PostgreSQL)
-
-ORM: Entity Framework Core
-
-Cloud/IA: Azure Computer Vision SDK (OCR)
-
-🧠 Lógica de Funcionamento
-Lançamento Inteligente: O usuário envia uma imagem; a API processa via Azure e devolve os dados estruturados para conferência.
-
-Mapeamento de Categorias: Sistema de análise que identifica para onde o dinheiro está indo (Lazer, Moradia, Alimentação, etc).
-
-Gestão de Sonhos: Aba de Bucket List para gerenciar desejos de consumo e viagens do casal.
-
-Evolução Patrimonial: Comparação visual entre ganhos pessoais e faturamentos de empreendimentos.
-
-⚙️ Como Rodar Localmente
-Pré-requisitos
-Node.js (para o Frontend)
-
-SDK .NET 8.0
-
-Chave de API da Azure (Vision OCR)
-
-Passo a Passo
-Clone o repositório:
-
-Bash
-git clone https://github.com/Tognolli0/Dashboard_Gestao_Casal.git
-Configuração do Backend:
-
-Navegue até MinhaVidaAPI/appsettings.json.
-
-Configure sua AzureAPIKey e AzureEndpoint.
-
-Execute as migrações:
-
-Bash
-dotnet ef database update
-Configuração do Frontend:
-
-Navegue até a pasta do Front.
-
-Instale as dependências: npm install.
-
-Inicie o projeto: npm run dev.
-
-🛡️ Segurança de Dados
-Este projeto utiliza tratamento rigoroso de segredos. As chaves de API devem ser gerenciadas preferencialmente via User Secrets no ambiente de desenvolvimento para evitar a exposição acidental em repositórios públicos.
-
-Desenvolvido por Diogo Tognolli 🚀
+Este repositorio deve virar a versao principal do projeto.
+A pasta `Dashboard_Gestao_Casal_Local` ainda precisa ser consolidada ou removida em uma segunda rodada de limpeza.
