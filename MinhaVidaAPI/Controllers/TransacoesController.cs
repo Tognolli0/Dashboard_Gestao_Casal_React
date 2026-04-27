@@ -26,11 +26,24 @@ namespace MinhaVidaAPI.Controllers
         [ResponseCache(Duration = 30, Location = ResponseCacheLocation.Any, VaryByHeader = "Accept-Encoding")]
         public async Task<ActionResult<IEnumerable<Transacao>>> GetTransacoes(string responsavel)
         {
-            return await _context.Transacoes
+            if (_cache.TryGetValue(CacheKeys.Transacoes(responsavel), out List<Transacao>? cachedTransacoes) && cachedTransacoes is not null)
+            {
+                return Ok(cachedTransacoes);
+            }
+
+            var transacoes = await _context.Transacoes
                 .AsNoTracking()
                 .Where(t => t.Responsavel == responsavel)
                 .OrderByDescending(t => t.Data)
                 .ToListAsync();
+
+            _cache.Set(CacheKeys.Transacoes(responsavel), transacoes, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(45),
+                SlidingExpiration = TimeSpan.FromSeconds(20)
+            });
+
+            return Ok(transacoes);
         }
 
         [HttpPost]
@@ -136,6 +149,8 @@ namespace MinhaVidaAPI.Controllers
         private void InvalidateDashboardCache()
         {
             _cache.Remove(CacheKeys.DashboardResumo);
+            _cache.Remove(CacheKeys.Transacoes("Eu"));
+            _cache.Remove(CacheKeys.Transacoes("Namorada"));
         }
     }
 }

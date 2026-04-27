@@ -28,7 +28,7 @@ namespace MinhaVidaAPI.Controllers
                 return Ok(cachedResumo);
             }
 
-            var transacoesTask = _context.Transacoes
+            var transacoes = await _context.Transacoes
                 .AsNoTracking()
                 .OrderByDescending(t => t.Data)
                 .Select(t => new
@@ -44,7 +44,7 @@ namespace MinhaVidaAPI.Controllers
                 })
                 .ToListAsync();
 
-            var metasTask = _context.Metas
+            var metas = await _context.Metas
                 .AsNoTracking()
                 .Select(m => new
                 {
@@ -59,7 +59,7 @@ namespace MinhaVidaAPI.Controllers
                 })
                 .ToListAsync();
 
-            var desejosTask = _context.Desejos
+            var desejos = await _context.Desejos
                 .AsNoTracking()
                 .OrderBy(d => d.DataAlvo)
                 .Select(d => new
@@ -71,12 +71,6 @@ namespace MinhaVidaAPI.Controllers
                     d.Concluido
                 })
                 .ToListAsync();
-
-            await Task.WhenAll(transacoesTask, metasTask, desejosTask);
-
-            var transacoes = transacoesTask.Result;
-            var metas = metasTask.Result;
-            var desejos = desejosTask.Result;
 
             var resumo = new
             {

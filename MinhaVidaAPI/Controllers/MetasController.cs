@@ -26,7 +26,20 @@ namespace MinhaVidaAPI.Controllers
         [ResponseCache(Duration = 30, Location = ResponseCacheLocation.Any)]
         public async Task<ActionResult<IEnumerable<Meta>>> GetMetas()
         {
-            return await _context.Metas.AsNoTracking().ToListAsync();
+            if (_cache.TryGetValue(CacheKeys.Metas, out List<Meta>? cachedMetas) && cachedMetas is not null)
+            {
+                return Ok(cachedMetas);
+            }
+
+            var metas = await _context.Metas.AsNoTracking().ToListAsync();
+
+            _cache.Set(CacheKeys.Metas, metas, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(45),
+                SlidingExpiration = TimeSpan.FromSeconds(20)
+            });
+
+            return Ok(metas);
         }
 
         [HttpPost]
@@ -139,6 +152,7 @@ namespace MinhaVidaAPI.Controllers
         private void InvalidateDashboardCache()
         {
             _cache.Remove(CacheKeys.DashboardResumo);
+            _cache.Remove(CacheKeys.Metas);
         }
     }
 }

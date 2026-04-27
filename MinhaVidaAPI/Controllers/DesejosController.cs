@@ -24,7 +24,20 @@ namespace MinhaVidaAPI.Controllers
         [ResponseCache(Duration = 30, Location = ResponseCacheLocation.Any)]
         public async Task<ActionResult<IEnumerable<Desejo>>> GetDesejos()
         {
-            return await _context.Desejos.AsNoTracking().ToListAsync();
+            if (_cache.TryGetValue(CacheKeys.Desejos, out List<Desejo>? cachedDesejos) && cachedDesejos is not null)
+            {
+                return Ok(cachedDesejos);
+            }
+
+            var desejos = await _context.Desejos.AsNoTracking().ToListAsync();
+
+            _cache.Set(CacheKeys.Desejos, desejos, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(45),
+                SlidingExpiration = TimeSpan.FromSeconds(20)
+            });
+
+            return Ok(desejos);
         }
 
         [HttpGet("{id}")]
@@ -94,6 +107,7 @@ namespace MinhaVidaAPI.Controllers
         private void InvalidateDashboardCache()
         {
             _cache.Remove(CacheKeys.DashboardResumo);
+            _cache.Remove(CacheKeys.Desejos);
         }
     }
 }
