@@ -28,7 +28,7 @@ namespace MinhaVidaAPI.Controllers
                 return Ok(cachedResumo);
             }
 
-            var transacoes = await _context.Transacoes
+            var transacoesTask = _context.Transacoes
                 .AsNoTracking()
                 .OrderByDescending(t => t.Data)
                 .Select(t => new
@@ -44,7 +44,7 @@ namespace MinhaVidaAPI.Controllers
                 })
                 .ToListAsync();
 
-            var metas = await _context.Metas
+            var metasTask = _context.Metas
                 .AsNoTracking()
                 .Select(m => new
                 {
@@ -52,11 +52,14 @@ namespace MinhaVidaAPI.Controllers
                     m.Titulo,
                     m.ValorObjetivo,
                     m.ValorGuardado,
-                    m.Responsavel
+                    m.Responsavel,
+                    m.EhReservaEmergencia,
+                    m.CriadaEm,
+                    m.AtualizadaEm
                 })
                 .ToListAsync();
 
-            var desejos = await _context.Desejos
+            var desejosTask = _context.Desejos
                 .AsNoTracking()
                 .OrderBy(d => d.DataAlvo)
                 .Select(d => new
@@ -69,6 +72,12 @@ namespace MinhaVidaAPI.Controllers
                 })
                 .ToListAsync();
 
+            await Task.WhenAll(transacoesTask, metasTask, desejosTask);
+
+            var transacoes = transacoesTask.Result;
+            var metas = metasTask.Result;
+            var desejos = desejosTask.Result;
+
             var resumo = new
             {
                 TransacoesEu = transacoes.Where(t => t.Responsavel == "Eu").ToList(),
@@ -77,7 +86,11 @@ namespace MinhaVidaAPI.Controllers
                 Desejos = desejos
             };
 
-            _cache.Set(CacheKeys.DashboardResumo, resumo, TimeSpan.FromSeconds(20));
+            _cache.Set(CacheKeys.DashboardResumo, resumo, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(45),
+                SlidingExpiration = TimeSpan.FromSeconds(20)
+            });
 
             return Ok(resumo);
         }

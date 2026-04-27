@@ -1,7 +1,9 @@
-﻿import axios from 'axios'
-import type { DashboardResumo, Desejo, Meta, Transacao } from '../types/models'
+import axios from 'axios'
+import type { ChecklistItem, DashboardResumo, Desejo, Meta, Transacao } from '../types/models'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'https://minhavidaapi.onrender.com'
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.DEV ? 'http://localhost:5163' : 'https://minhavidaapi.onrender.com')
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -17,9 +19,9 @@ api.interceptors.response.use(
   async (error) => {
     const config = error.config
 
-    if (config && !config._retry && (error.code === 'ECONNABORTED' || error.response?.status === 502 || error.response?.status === 503)) {
+    if (config && !config._retry && (error.code === 'ECONNABORTED' || !error.response)) {
       config._retry = true
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      await new Promise((resolve) => setTimeout(resolve, 800))
       return api(config)
     }
 
@@ -85,5 +87,33 @@ export const postDesejo = (desejo: Partial<Desejo>): Promise<Desejo> =>
 export const deleteDesejo = (id: number): Promise<void> =>
   api.delete(`/api/desejos/${id}`).then(() => undefined)
 
-export default api
+export const getChecklistMensal = (mes: string): Promise<ChecklistItem[]> =>
+  api.get('/api/checklist', { params: { mes } }).then((response) => response.data)
 
+export const addChecklistItem = (item: Partial<ChecklistItem>): Promise<ChecklistItem> =>
+  api.post('/api/checklist', item).then((response) => response.data)
+
+export const updateChecklistItem = (item: ChecklistItem): Promise<ChecklistItem> =>
+  api.put(`/api/checklist/${item.id}`, item).then((response) => response.data)
+
+export const deleteChecklistItem = (id: number): Promise<void> =>
+  api.delete(`/api/checklist/${id}`).then(() => undefined)
+
+export const resetChecklistMensal = (mes: string): Promise<void> =>
+  api.post('/api/checklist/reset', null, { params: { mes } }).then(() => undefined)
+
+export const baixarBackupLocal = (): Promise<Blob> =>
+  api.get('/api/local/backup', { responseType: 'blob' }).then((response) => response.data)
+
+export const restaurarBackupLocal = (file: File): Promise<{ message: string }> => {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return api.post('/api/local/restore', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  }).then((response) => response.data)
+}
+
+export default api

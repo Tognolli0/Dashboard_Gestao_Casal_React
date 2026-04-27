@@ -40,3 +40,59 @@ export function sortTransactionsByDateDesc(transactions: Transacao[]) {
   )
 }
 
+export function buildOptimisticTransaction(transaction: Partial<Transacao>): Transacao {
+  const tipo = (transaction.tipo ?? 'Saída') as 'Entrada' | 'Saída'
+  const valorBase = Math.abs(Number(transaction.valor ?? 0))
+
+  return {
+    id: transaction.id ?? -Date.now(),
+    descricao: transaction.descricao ?? '',
+    data: transaction.data ?? new Date().toISOString(),
+    responsavel: (transaction.responsavel ?? 'Eu') as 'Eu' | 'Namorada',
+    categoria: transaction.categoria ?? 'Geral',
+    tipo,
+    ehPessoal: transaction.ehPessoal ?? true,
+    valor: tipo === 'Entrada' ? valorBase : -valorBase,
+  }
+}
+
+export function replaceTransaction(
+  transactions: Transacao[],
+  transactionId: number,
+  nextTransaction: Transacao,
+) {
+  return sortTransactionsByDateDesc(
+    transactions.map((transaction) =>
+      transaction.id === transactionId ? nextTransaction : transaction,
+    ),
+  )
+}
+
+export function appendTransaction(transactions: Transacao[], nextTransaction: Transacao) {
+  return sortTransactionsByDateDesc([...transactions, nextTransaction])
+}
+
+export function removeTransaction(transactions: Transacao[], transactionId: number) {
+  return transactions.filter((transaction) => transaction.id !== transactionId)
+}
+
+export function updateDashboardTransactions(
+  resumo: DashboardResumo | undefined,
+  responsavel: 'Eu' | 'Namorada',
+  updater: (transactions: Transacao[]) => Transacao[],
+) {
+  if (!resumo) return resumo
+
+  if (responsavel === 'Eu') {
+    return {
+      ...resumo,
+      transacoesEu: updater(resumo.transacoesEu),
+    }
+  }
+
+  return {
+    ...resumo,
+    transacoesDela: updater(resumo.transacoesDela),
+  }
+}
+

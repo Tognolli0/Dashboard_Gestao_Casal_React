@@ -16,6 +16,12 @@ namespace MinhaVidaAPI.Models
 
         public string Responsavel { get; set; } = "Casal";
 
+        public bool EhReservaEmergencia { get; set; }
+
+        public DateTime CriadaEm { get; set; } = DateTime.UtcNow;
+
+        public DateTime AtualizadaEm { get; set; } = DateTime.UtcNow;
+
         // Propriedade calculada: Facilita a exibição no Blazor e no WhatsApp
         // O [NotMapped] avisa o Banco de Dados para ignorar este campo
         [NotMapped]

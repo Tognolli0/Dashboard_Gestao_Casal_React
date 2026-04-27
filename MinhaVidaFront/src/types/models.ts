@@ -15,6 +15,9 @@ export interface Meta {
   valorObjetivo: number
   valorGuardado: number
   responsavel: string
+  ehReservaEmergencia: boolean
+  criadaEm: string
+  atualizadaEm: string
 }
 
 export interface Desejo {
@@ -23,6 +26,14 @@ export interface Desejo {
   dataAlvo: string
   icone: string
   concluido: boolean
+}
+
+export interface ChecklistItem {
+  id: number
+  mesReferencia: string
+  titulo: string
+  concluido: boolean
+  ordem: number
 }
 
 export interface DashboardResumo {
