@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { deleteTransacao, getDashboardResumo, getTransacoes, postTransacao } from '../services/api'
+import { deleteTransacao, getTransacoesPorPeriodo, postTransacao } from '../services/api'
 import { DASHBOARD_QUERY_KEY } from '../lib/queryClient'
 import {
   appendTransaction,
   buildOptimisticTransaction,
-  filterTransactionsByMonth,
   removeTransaction,
   replaceTransaction,
   summarizeTransactions,
@@ -77,27 +76,24 @@ export default function FinancialSpacePage({
   const [filtroCategoria, setFiltroCategoria] = useState('Todas')
   const [ordenacao, setOrdenacao] = useState<'recentes' | 'maiores' | 'menores'>('recentes')
   const [erro, setErro] = useState('')
+  const anoAtual = new Date().getFullYear()
 
   const { data: lista = [], isLoading } = useQuery({
-    queryKey: ['transacoes', responsavel],
-    queryFn: () => getTransacoes(responsavel),
-    initialData: () => {
-      const resumo = queryClient.getQueryData<Awaited<ReturnType<typeof getDashboardResumo>>>(DASHBOARD_QUERY_KEY)
-      return responsavel === 'Eu' ? resumo?.transacoesEu : resumo?.transacoesDela
-    },
+    queryKey: ['transacoes', responsavel, anoAtual, mes],
+    queryFn: () => getTransacoesPorPeriodo(responsavel, mes + 1, anoAtual),
   })
 
   const saveMutation = useMutation({
     mutationFn: postTransacao,
     onMutate: async (payload) => {
-      await queryClient.cancelQueries({ queryKey: ['transacoes', responsavel] })
+      await queryClient.cancelQueries({ queryKey: ['transacoes', responsavel, anoAtual, mes] })
       await queryClient.cancelQueries({ queryKey: DASHBOARD_QUERY_KEY })
 
-      const previousTransactions = queryClient.getQueryData<Transacao[]>(['transacoes', responsavel]) ?? []
+      const previousTransactions = queryClient.getQueryData<Transacao[]>(['transacoes', responsavel, anoAtual, mes]) ?? []
       const previousDashboard = queryClient.getQueryData<DashboardResumo>(DASHBOARD_QUERY_KEY)
       const optimisticTransaction = buildOptimisticTransaction(payload)
 
-      queryClient.setQueryData<Transacao[]>(['transacoes', responsavel], (current = []) =>
+      queryClient.setQueryData<Transacao[]>(['transacoes', responsavel, anoAtual, mes], (current = []) =>
         appendTransaction(current, optimisticTransaction),
       )
 
@@ -130,7 +126,7 @@ export default function FinancialSpacePage({
     },
     onError: (error: any, _payload, context) => {
       if (context?.previousTransactions) {
-        queryClient.setQueryData(['transacoes', responsavel], context.previousTransactions)
+        queryClient.setQueryData(['transacoes', responsavel, anoAtual, mes], context.previousTransactions)
       }
       if (context?.previousDashboard) {
         queryClient.setQueryData(DASHBOARD_QUERY_KEY, context.previousDashboard)
@@ -142,13 +138,13 @@ export default function FinancialSpacePage({
   const deleteMutation = useMutation({
     mutationFn: deleteTransacao,
     onMutate: async (transactionId) => {
-      await queryClient.cancelQueries({ queryKey: ['transacoes', responsavel] })
+      await queryClient.cancelQueries({ queryKey: ['transacoes', responsavel, anoAtual, mes] })
       await queryClient.cancelQueries({ queryKey: DASHBOARD_QUERY_KEY })
 
-      const previousTransactions = queryClient.getQueryData<Transacao[]>(['transacoes', responsavel]) ?? []
+      const previousTransactions = queryClient.getQueryData<Transacao[]>(['transacoes', responsavel, anoAtual, mes]) ?? []
       const previousDashboard = queryClient.getQueryData<DashboardResumo>(DASHBOARD_QUERY_KEY)
 
-      queryClient.setQueryData<Transacao[]>(['transacoes', responsavel], (current = []) =>
+      queryClient.setQueryData<Transacao[]>(['transacoes', responsavel, anoAtual, mes], (current = []) =>
         removeTransaction(current, transactionId),
       )
 
@@ -162,7 +158,7 @@ export default function FinancialSpacePage({
     },
     onError: (_error, _transactionId, context) => {
       if (context?.previousTransactions) {
-        queryClient.setQueryData(['transacoes', responsavel], context.previousTransactions)
+        queryClient.setQueryData(['transacoes', responsavel, anoAtual, mes], context.previousTransactions)
       }
       if (context?.previousDashboard) {
         queryClient.setQueryData(DASHBOARD_QUERY_KEY, context.previousDashboard)
@@ -171,7 +167,10 @@ export default function FinancialSpacePage({
   })
 
   const abaAtual = abas.find((item) => item.id === aba) ?? abas[0]
-  const baseFiltradas = filterTransactionsByMonth(lista, mes, abaAtual.personal)
+  const baseFiltradas = useMemo(
+    () => lista.filter((transaction) => transaction.ehPessoal === abaAtual.personal),
+    [abaAtual.personal, lista],
+  )
   const categoriasDisponiveis = useMemo(
     () => ['Todas', ...new Set(baseFiltradas.map((transaction) => transaction.categoria))],
     [baseFiltradas],

@@ -42,3 +42,82 @@ export interface DashboardResumo {
   metas: Meta[]
   desejos: Desejo[]
 }
+
+export interface DashboardFluxoResumo {
+  entradas: number
+  saidas: number
+  saldo: number
+}
+
+export interface DashboardCategoriaResumo {
+  nome: string
+  total: number
+}
+
+export interface DashboardTotaisResumo {
+  eu: number
+  bia: number
+  juntos: number
+}
+
+export interface DashboardMesAtualResumo {
+  entradas: number
+  saidas: number
+  saldo: number
+  taxaPoupanca: number
+  categoriaTop: DashboardCategoriaResumo
+}
+
+export interface DashboardMetasResumo {
+  totalMetas: number
+  totalGuardado: number
+  progresso: number
+  concluidas: number
+  bucketsAbertos: number
+}
+
+export interface DashboardEvolucaoItem {
+  mes: string
+  entradas: number
+  saidas: number
+  saldo: number
+  diogo: number
+  beatriz: number
+}
+
+export interface DashboardCategoriaChartItem {
+  name: string
+  value: number
+  color: string
+}
+
+export interface DashboardAlerta {
+  id: string
+  title: string
+  message: string
+  tone: 'amber' | 'rose' | 'indigo' | 'green'
+}
+
+export interface DashboardReservaPlanejamento {
+  objetivoIdeal: number
+  coberturaMeses: number
+  faltanteIdeal: number
+}
+
+export interface DashboardHomeResumo {
+  metas: Meta[]
+  desejos: Desejo[]
+  reservaEmergencia: Meta | null
+  totais: DashboardTotaisResumo
+  fluxoEu: DashboardFluxoResumo
+  fluxoDela: DashboardFluxoResumo
+  mesAtual: DashboardMesAtualResumo
+  metasResumo: DashboardMetasResumo
+  scoreFinanceiro: number
+  destaquePrincipal: string
+  acaoRecomendada: string
+  evolucaoMensal: DashboardEvolucaoItem[]
+  reservaPlanejamento: DashboardReservaPlanejamento
+  categoriasChart: DashboardCategoriaChartItem[]
+  alertas: DashboardAlerta[]
+}

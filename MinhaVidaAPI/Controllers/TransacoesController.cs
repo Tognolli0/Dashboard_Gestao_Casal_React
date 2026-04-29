@@ -22,10 +22,66 @@ namespace MinhaVidaAPI.Controllers
             _cache = cache;
         }
 
+        [HttpGet]
+        [ResponseCache(Duration = 20, Location = ResponseCacheLocation.Any, VaryByQueryKeys = new[] { "responsavel", "mes", "ano" })]
+        public async Task<ActionResult<IEnumerable<Transacao>>> GetTransacoesFiltradas(
+            [FromQuery] string? responsavel,
+            [FromQuery] int? mes,
+            [FromQuery] int? ano)
+        {
+            var query = _context.Transacoes
+                .AsNoTracking()
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(responsavel))
+            {
+                query = query.Where(t => t.Responsavel == responsavel);
+            }
+
+            if (ano.HasValue)
+            {
+                query = query.Where(t => t.Data.Year == ano.Value);
+            }
+
+            if (mes.HasValue)
+            {
+                query = query.Where(t => t.Data.Month == mes.Value);
+            }
+
+            var transacoes = await query
+                .OrderByDescending(t => t.Data)
+                .ToListAsync();
+
+            return Ok(transacoes);
+        }
+
         [HttpGet("{responsavel}")]
         [ResponseCache(Duration = 30, Location = ResponseCacheLocation.Any, VaryByHeader = "Accept-Encoding")]
-        public async Task<ActionResult<IEnumerable<Transacao>>> GetTransacoes(string responsavel)
+        public async Task<ActionResult<IEnumerable<Transacao>>> GetTransacoes(string responsavel, [FromQuery] int? mes, [FromQuery] int? ano)
         {
+            if (mes.HasValue || ano.HasValue)
+            {
+                var query = _context.Transacoes
+                    .AsNoTracking()
+                    .Where(t => t.Responsavel == responsavel);
+
+                if (ano.HasValue)
+                {
+                    query = query.Where(t => t.Data.Year == ano.Value);
+                }
+
+                if (mes.HasValue)
+                {
+                    query = query.Where(t => t.Data.Month == mes.Value);
+                }
+
+                var transacoesFiltradas = await query
+                    .OrderByDescending(t => t.Data)
+                    .ToListAsync();
+
+                return Ok(transacoesFiltradas);
+            }
+
             if (_cache.TryGetValue(CacheKeys.Transacoes(responsavel), out List<Transacao>? cachedTransacoes) && cachedTransacoes is not null)
             {
                 return Ok(cachedTransacoes);
@@ -149,6 +205,7 @@ namespace MinhaVidaAPI.Controllers
         private void InvalidateDashboardCache()
         {
             _cache.Remove(CacheKeys.DashboardResumo);
+            _cache.Remove(CacheKeys.DashboardHome);
             _cache.Remove(CacheKeys.Transacoes("Eu"));
             _cache.Remove(CacheKeys.Transacoes("Namorada"));
         }

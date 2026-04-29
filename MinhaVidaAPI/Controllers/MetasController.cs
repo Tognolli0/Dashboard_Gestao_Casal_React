@@ -152,6 +152,7 @@ namespace MinhaVidaAPI.Controllers
         private void InvalidateDashboardCache()
         {
             _cache.Remove(CacheKeys.DashboardResumo);
+            _cache.Remove(CacheKeys.DashboardHome);
             _cache.Remove(CacheKeys.Metas);
         }
     }

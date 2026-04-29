@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { ChecklistItem, DashboardResumo, Desejo, Meta, Transacao } from '../types/models'
+import type { ChecklistItem, DashboardHomeResumo, DashboardResumo, Desejo, Meta, Transacao } from '../types/models'
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ??
@@ -41,8 +41,33 @@ export function warmUpAPI() {
 export const getDashboardResumo = (): Promise<DashboardResumo> =>
   api.get('/api/dashboard/resumo').then((response) => response.data)
 
+export const getDashboardHomeResumo = (): Promise<DashboardHomeResumo> =>
+  api.get('/api/dashboard/home').then((response) => response.data)
+
 export const getTransacoes = (responsavel: string): Promise<Transacao[]> =>
   api.get(`/api/transacoes/${responsavel}`).then((response) => response.data)
+
+export const getTransacoesPorPeriodo = (
+  responsavel: 'Eu' | 'Namorada',
+  mes: number,
+  ano: number,
+): Promise<Transacao[]> =>
+  api.get(`/api/transacoes/${responsavel}`, {
+    params: { mes, ano },
+  }).then((response) => response.data)
+
+export const getTransacoesGeraisPorPeriodo = (
+  mes: number,
+  ano: number,
+  responsavel?: 'Eu' | 'Namorada' | 'Todos',
+): Promise<Transacao[]> =>
+  api.get('/api/transacoes', {
+    params: {
+      mes,
+      ano,
+      responsavel: responsavel && responsavel !== 'Todos' ? responsavel : undefined,
+    },
+  }).then((response) => response.data)
 
 export const getMetas = (): Promise<Meta[]> =>
   api.get('/api/metas').then((response) => response.data)

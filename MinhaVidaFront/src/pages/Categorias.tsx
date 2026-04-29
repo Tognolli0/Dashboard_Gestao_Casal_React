@@ -1,27 +1,20 @@
 ﻿import { useState } from 'react'
 import { BarChart, Briefcase, Calendar, Home as HomeIcon, PieChart, Search, TrendingUp } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { getDashboardResumo } from '../services/api'
-import { combineTransactions, sortTransactionsByDateDesc } from '../lib/dashboard'
-import { DASHBOARD_QUERY_KEY } from '../lib/queryClient'
+import { getTransacoesGeraisPorPeriodo } from '../services/api'
+import { sortTransactionsByDateDesc } from '../lib/dashboard'
 import { Badge, Spinner, fmt } from '../components/ui'
+import type { Transacao } from '../types/models'
 
 export default function Categorias() {
-  const { data: resumo, isLoading } = useQuery({
-    queryKey: DASHBOARD_QUERY_KEY,
-    queryFn: getDashboardResumo,
-  })
-
   const [mesSelecionado, setMesSelecionado] = useState(new Date().getMonth() + 1)
   const [pessoaSelecionada, setPessoaSelecionada] = useState<'Todos' | 'Eu' | 'Namorada'>('Todos')
   const [filtroTexto, setFiltroTexto] = useState('')
+  const anoAtual = new Date().getFullYear()
 
-  const todasTransacoes = combineTransactions(resumo)
-  const transacoesMes = todasTransacoes.filter((transaction) => {
-    const data = new Date(transaction.data)
-    const mesBate = data.getMonth() + 1 === mesSelecionado
-    const pessoaBate = pessoaSelecionada === 'Todos' || transaction.responsavel === pessoaSelecionada
-    return mesBate && pessoaBate
+  const { data: transacoesMes = [], isLoading } = useQuery<Transacao[]>({
+    queryKey: ['categorias-transacoes', anoAtual, mesSelecionado, pessoaSelecionada],
+    queryFn: () => getTransacoesGeraisPorPeriodo(mesSelecionado, anoAtual, pessoaSelecionada),
   })
 
   const termoBusca = filtroTexto.trim().toLowerCase()

@@ -1,16 +1,16 @@
 ﻿import { useMemo, useState } from 'react'
-import { AlertTriangle, Briefcase, CheckCheck, ClipboardList, DollarSign, Download, PiggyBank, Plus, RotateCcw, Shield, ShoppingBag, Sparkles, Target, Trash2, TrendingUp, Upload, Wallet } from 'lucide-react'
+import { AlertTriangle, CheckCheck, ClipboardList, DollarSign, Download, PiggyBank, Plus, RotateCcw, Shield, ShoppingBag, Sparkles, Target, Trash2, TrendingUp, Upload } from 'lucide-react'
+import { Suspense, lazy } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Area, AreaChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, BarChart, Bar } from 'recharts'
-import { addChecklistItem, baixarBackupLocal, deleteChecklistItem, deleteDesejo, deleteMeta, getChecklistMensal, getDashboardResumo, postDesejo, postMeta, realizarAporte, resetChecklistMensal, restaurarBackupLocal, updateChecklistItem } from '../services/api'
-import { DASHBOARD_QUERY_KEY } from '../lib/queryClient'
-import { combineTransactions } from '../lib/dashboard'
+import { addChecklistItem, baixarBackupLocal, deleteChecklistItem, deleteDesejo, deleteMeta, getChecklistMensal, getDashboardHomeResumo, postDesejo, postMeta, realizarAporte, resetChecklistMensal, restaurarBackupLocal, updateChecklistItem } from '../services/api'
+import { DASHBOARD_HOME_QUERY_KEY, DASHBOARD_QUERY_KEY } from '../lib/queryClient'
 import { Badge, Btn, Card, Input, Modal, ProgressBar, SkeletonDashboard, StatCard, fmt } from '../components/ui'
-import type { ChecklistItem, DashboardResumo, Desejo, Meta, Transacao } from '../types/models'
+import type { ChecklistItem, DashboardFluxoResumo, DashboardHomeResumo, DashboardResumo, Desejo, Meta } from '../types/models'
 
 const FORM_META_VAZIO = { titulo: '', valorObjetivo: '', valorGuardado: '0', responsavel: 'Casal', ehReservaEmergencia: false }
 const FORM_DESEJO_VAZIO = { titulo: '', dataAlvo: '', icone: '*' }
 const CHECKLIST_QUERY_KEY = ['checklist-mensal']
+const HomeEvolutionSection = lazy(() => import('../components/HomeEvolutionSection'))
 
 function mutateResumo(
   current: DashboardResumo | undefined,
@@ -26,43 +26,21 @@ function getBarHeight(value: number, max: number) {
   return Math.round(14 + normalized * 150)
 }
 
-const CHART_COLORS = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#ef4444']
-const MONTH_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-
-function buildFluxoData(transacoes: Transacao[]) {
-  const entradas = transacoes
-    .filter((t) => t.tipo === 'Entrada')
-    .reduce((acc, t) => acc + t.valor, 0)
-
-  const saidas = transacoes
-    .filter((t) => t.tipo === 'Saída')
-    .reduce((acc, t) => acc + Math.abs(t.valor), 0)
-
-  const saldo = entradas - saidas
-  const escala = Math.max(entradas, saidas, Math.abs(saldo), 1)
-
-  return {
-    entradas,
-    saidas,
-    saldo,
-    escala,
-  }
-}
-
 function FluxoCard({
   titulo,
   icon,
   iconWrap,
   iconColor,
-  transacoes,
+  resumo,
 }: {
   titulo: string
   icon: React.ReactNode
   iconWrap: string
   iconColor: string
-  transacoes: Transacao[]
+  resumo: DashboardFluxoResumo
 }) {
-  const { entradas, saidas, saldo, escala } = buildFluxoData(transacoes)
+  const { entradas, saidas, saldo } = resumo
+  const escala = Math.max(entradas, saidas, Math.abs(saldo), 1)
   const barras = [
     {
       label: 'Entradas',
@@ -244,9 +222,11 @@ export default function Home() {
   const [erroRotina, setErroRotina] = useState('')
   const [statusRotina, setStatusRotina] = useState('')
 
-  const { data: resumo, isLoading } = useQuery({
-    queryKey: DASHBOARD_QUERY_KEY,
-    queryFn: getDashboardResumo,
+  const invalidateHomeResumo = () => queryClient.invalidateQueries({ queryKey: DASHBOARD_HOME_QUERY_KEY })
+
+  const { data: homeResumo, isLoading } = useQuery<DashboardHomeResumo>({
+    queryKey: DASHBOARD_HOME_QUERY_KEY,
+    queryFn: getDashboardHomeResumo,
   })
   const mesChecklist = new Date().toISOString().slice(0, 7)
 
@@ -270,10 +250,12 @@ export default function Home() {
       setNovaMeta(FORM_META_VAZIO)
       setModoMeta('meta')
       setErroMeta('')
+      invalidateHomeResumo()
     },
     onError: (error: any) => {
       queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY })
       setErroMeta(error?.response?.data ?? 'Erro ao salvar meta.')
+      invalidateHomeResumo()
     },
   })
 
@@ -297,6 +279,7 @@ export default function Home() {
         queryClient.setQueryData(DASHBOARD_QUERY_KEY, context.previous)
       }
     },
+    onSettled: invalidateHomeResumo,
   })
 
   const aporteMutation = useMutation({
@@ -331,12 +314,14 @@ export default function Home() {
       setValorAporte('')
       setErroAporte('')
       setModalAporte(false)
+      invalidateHomeResumo()
     },
     onError: (error: any, _variables, context) => {
       if (context?.previous) {
         queryClient.setQueryData(DASHBOARD_QUERY_KEY, context.previous)
       }
       setErroAporte(error?.response?.data ?? 'Erro ao registrar aporte.')
+      invalidateHomeResumo()
     },
   })
 
@@ -354,10 +339,12 @@ export default function Home() {
       setModalDesejo(false)
       setNovoDesejo(FORM_DESEJO_VAZIO)
       setErroDesejo('')
+      invalidateHomeResumo()
     },
     onError: (error: any) => {
       queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY })
       setErroDesejo(error?.response?.data ?? 'Erro ao salvar desejo.')
+      invalidateHomeResumo()
     },
   })
 
@@ -381,6 +368,7 @@ export default function Home() {
         queryClient.setQueryData(DASHBOARD_QUERY_KEY, context.previous)
       }
     },
+    onSettled: invalidateHomeResumo,
   })
 
   const addChecklistMutation = useMutation({
@@ -460,6 +448,7 @@ export default function Home() {
     mutationFn: restaurarBackupLocal,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY })
+      invalidateHomeResumo()
       queryClient.invalidateQueries({ queryKey: [...CHECKLIST_QUERY_KEY, mesChecklist] })
       setStatusRotina('Backup restaurado com sucesso.')
       setErroRotina('')
@@ -470,192 +459,43 @@ export default function Home() {
   })
 
   const metas = useMemo(
-    () => [...(resumo?.metas ?? [])]
+    () => [...(homeResumo?.metas ?? [])]
       .filter((meta) => !meta.ehReservaEmergencia)
       .sort((a, b) => (b.valorGuardado / Math.max(b.valorObjetivo, 1)) - (a.valorGuardado / Math.max(a.valorObjetivo, 1))),
-    [resumo?.metas],
+    [homeResumo?.metas],
   )
-  const reservaEmergencia = useMemo(
-    () => [...(resumo?.metas ?? [])].find((meta) => meta.ehReservaEmergencia) ?? null,
-    [resumo?.metas],
-  )
-  const desejos = resumo?.desejos ?? []
+  const reservaEmergencia = homeResumo?.reservaEmergencia ?? null
+  const desejos = homeResumo?.desejos ?? []
 
-  const totalEu = resumo?.transacoesEu?.reduce((acc, transaction) => acc + transaction.valor, 0) ?? 0
-  const totalBia = resumo?.transacoesDela?.reduce((acc, transaction) => acc + transaction.valor, 0) ?? 0
-  const totalJuntos = totalEu + totalBia
+  const totalEu = homeResumo?.totais.eu ?? 0
+  const totalBia = homeResumo?.totais.bia ?? 0
+  const totalJuntos = homeResumo?.totais.juntos ?? 0
 
-  const todasTransacoes = combineTransactions(resumo)
-  const mesAtual = new Date().getMonth()
-  const transacoesMes = todasTransacoes.filter((transaction) => new Date(transaction.data).getMonth() === mesAtual)
-  const entradasMes = transacoesMes.filter((transaction) => transaction.tipo === 'Entrada').reduce((acc, transaction) => acc + transaction.valor, 0)
-  const saidasMes = transacoesMes.filter((transaction) => transaction.tipo === 'Saída').reduce((acc, transaction) => acc + Math.abs(transaction.valor), 0)
-  const saldoMes = entradasMes - saidasMes
-  const taxaPoupanca = entradasMes > 0 ? Math.round((saldoMes / entradasMes) * 100) : 0
+  const fluxoEu = homeResumo?.fluxoEu ?? { entradas: 0, saidas: 0, saldo: 0 }
+  const fluxoDela = homeResumo?.fluxoDela ?? { entradas: 0, saidas: 0, saldo: 0 }
 
-  const categoriaTopMes = useMemo(() => {
-    const categorias = new Map<string, number>()
-    for (const transaction of transacoesMes.filter((item) => item.tipo === 'Saída')) {
-      categorias.set(transaction.categoria, (categorias.get(transaction.categoria) ?? 0) + Math.abs(transaction.valor))
-    }
+  const entradasMes = homeResumo?.mesAtual.entradas ?? 0
+  const saidasMes = homeResumo?.mesAtual.saidas ?? 0
+  const saldoMes = homeResumo?.mesAtual.saldo ?? 0
+  const taxaPoupanca = homeResumo?.mesAtual.taxaPoupanca ?? 0
+  const categoriaTopMes = homeResumo?.mesAtual.categoriaTop ?? { nome: 'Sem destaque', total: 0 }
 
-    const [nome, total] = [...categorias.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['Sem destaque', 0]
-    return { nome, total }
-  }, [transacoesMes])
+  const totalMetas = homeResumo?.metasResumo.totalMetas ?? 0
+  const totalGuardadoMetas = homeResumo?.metasResumo.totalGuardado ?? 0
+  const progressoMetas = homeResumo?.metasResumo.progresso ?? 0
+  const metasConcluidas = homeResumo?.metasResumo.concluidas ?? 0
+  const bucketsAbertos = homeResumo?.metasResumo.bucketsAbertos ?? 0
 
-  const totalMetas = metas.reduce((acc, meta) => acc + meta.valorObjetivo, 0)
-  const totalGuardadoMetas = metas.reduce((acc, meta) => acc + meta.valorGuardado, 0)
-  const progressoMetas = totalMetas > 0 ? Math.round((totalGuardadoMetas / totalMetas) * 100) : 0
-  const metasConcluidas = metas.filter((meta) => meta.valorGuardado >= meta.valorObjetivo).length
-  const bucketsAbertos = desejos.filter((item) => !item.concluido).length
+  const scoreFinanceiro = homeResumo?.scoreFinanceiro ?? 0
+  const destaquePrincipal = homeResumo?.destaquePrincipal ?? 'Carregando visão consolidada do casal.'
+  const acaoRecomendada = homeResumo?.acaoRecomendada ?? 'Assim que os dados entrarem, o painel mostra a melhor próxima ação.'
 
-  const scoreFinanceiro = Math.max(0, Math.min(100,
-    45 +
-    (saldoMes >= 0 ? 20 : -20) +
-    (taxaPoupanca >= 20 ? 15 : taxaPoupanca > 0 ? 5 : -10) +
-    (progressoMetas >= 50 ? 10 : progressoMetas > 0 ? 5 : 0) +
-    (categoriaTopMes.total > 0 && saidasMes > 0 && categoriaTopMes.total / saidasMes > 0.45 ? -10 : 10),
-  ))
-
-  const destaquePrincipal = saldoMes >= 0
-    ? `Vocês fecharam o mês com ${fmt(saldoMes)} livres até aqui.`
-    : `As saídas do mês estão ${fmt(Math.abs(saldoMes))} acima da sobra atual.`
-
-  const acaoRecomendada = saldoMes < 0
-    ? 'Revisem a categoria mais pesada e segurem gastos variáveis nesta semana.'
-    : progressoMetas < 100
-      ? 'Excelente momento para direcionar parte da sobra do mês para uma meta ativa.'
-      : 'Com metas bem encaminhadas, vale criar uma nova reserva estratégica para os próximos planos.'
-
-  const evolucaoMensal = useMemo(() => {
-    const seed = MONTH_LABELS.map((label) => ({
-      mes: label,
-      entradas: 0,
-      saidas: 0,
-      saldo: 0,
-      diogo: 0,
-      beatriz: 0,
-    }))
-
-    for (const transaction of todasTransacoes) {
-      const month = new Date(transaction.data).getMonth()
-      const current = seed[month]
-
-      if (transaction.tipo === 'Entrada') {
-        current.entradas += transaction.valor
-      } else {
-        current.saidas += Math.abs(transaction.valor)
-      }
-
-      current.saldo = current.entradas - current.saidas
-
-      if (transaction.responsavel === 'Eu') {
-        current.diogo += transaction.valor
-      } else {
-        current.beatriz += transaction.valor
-      }
-    }
-
-    return seed
-  }, [todasTransacoes])
-
-  const saidasRecentes = evolucaoMensal
-    .map((item) => item.saidas)
-    .filter((value) => value > 0)
-    .slice(-3)
-  const mediaSaidasRecentes = saidasRecentes.length > 0
-    ? saidasRecentes.reduce((acc, value) => acc + value, 0) / saidasRecentes.length
-    : saidasMes
-  const objetivoIdealReserva = Math.max(mediaSaidasRecentes * 6, mediaSaidasRecentes > 0 ? mediaSaidasRecentes : 0)
-  const coberturaReservaMeses = mediaSaidasRecentes > 0 && reservaEmergencia
-    ? reservaEmergencia.valorGuardado / mediaSaidasRecentes
-    : 0
-  const faltanteReservaIdeal = Math.max(objetivoIdealReserva - (reservaEmergencia?.valorGuardado ?? 0), 0)
-
-  const categoriasChart = useMemo(() => {
-    const categories = new Map<string, number>()
-
-    for (const transaction of todasTransacoes.filter((item) => item.tipo === 'Saída')) {
-      categories.set(transaction.categoria, (categories.get(transaction.categoria) ?? 0) + Math.abs(transaction.valor))
-    }
-
-    return [...categories.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([name, value], index) => ({
-        name,
-        value,
-        color: CHART_COLORS[index % CHART_COLORS.length],
-      }))
-  }, [todasTransacoes])
-
-  const alertasInteligentes = useMemo(() => {
-    const alertas: { id: string; title: string; message: string; tone: 'amber' | 'rose' | 'indigo' | 'green' }[] = []
-    const mesesComSaida = evolucaoMensal.filter((item) => item.saidas > 0)
-    const mediaSaidasHistorica = mesesComSaida.length > 0
-      ? mesesComSaida.reduce((acc, item) => acc + item.saidas, 0) / mesesComSaida.length
-      : 0
-    const categoriaPeso = saidasMes > 0 ? categoriaTopMes.total / saidasMes : 0
-    const metasParadas = metas
-      .filter((meta) => meta.valorGuardado < meta.valorObjetivo)
-      .filter((meta) => {
-        const diasParada = Math.floor((Date.now() - new Date(meta.atualizadaEm).getTime()) / (1000 * 60 * 60 * 24))
-        return diasParada >= 45
-      })
-      .sort((a, b) => new Date(a.atualizadaEm).getTime() - new Date(b.atualizadaEm).getTime())
-
-    if (mediaSaidasHistorica > 0 && saidasMes > mediaSaidasHistorica * 1.2) {
-      const excesso = saidasMes - mediaSaidasHistorica
-      alertas.push({
-        id: 'gasto-acima',
-        title: 'Gasto acima do normal',
-        message: `As saídas do mês estão ${fmt(excesso)} acima da média recente do casal.`,
-        tone: 'rose',
-      })
-    }
-
-    if (categoriaTopMes.total > 0 && categoriaPeso >= 0.35) {
-      alertas.push({
-        id: 'categoria-estourando',
-        title: 'Categoria estourando',
-        message: `${categoriaTopMes.nome} já consome ${(categoriaPeso * 100).toFixed(0)}% das saídas do mês.`,
-        tone: 'amber',
-      })
-    }
-
-    if (entradasMes > 0 && (saldoMes < 0 || taxaPoupanca <= 10)) {
-      alertas.push({
-        id: 'saldo-apertado',
-        title: 'Saldo do mês apertando',
-        message: saldoMes < 0
-          ? `O mês está negativo em ${fmt(Math.abs(saldoMes))}. Vale segurar gastos variáveis agora.`
-          : `A sobra do mês caiu para ${taxaPoupanca}%, abaixo da faixa confortável.`,
-        tone: saldoMes < 0 ? 'rose' : 'amber',
-      })
-    }
-
-    if (metasParadas.length > 0) {
-      const metaParada = metasParadas[0]
-      const diasParada = Math.floor((Date.now() - new Date(metaParada.atualizadaEm).getTime()) / (1000 * 60 * 60 * 24))
-      alertas.push({
-        id: 'meta-parada',
-        title: 'Meta parada há muito tempo',
-        message: `${metaParada.titulo} está sem aporte há ${diasParada} dias. Um pequeno reforço já reacende o plano.`,
-        tone: 'indigo',
-      })
-    }
-
-    if (alertas.length === 0) {
-      alertas.push({
-        id: 'sem-alertas',
-        title: 'Painel estável',
-        message: 'Sem alertas críticos agora. O momento está bom para manter constância e reforçar metas.',
-        tone: 'green',
-      })
-    }
-
-    return alertas.slice(0, 4)
-  }, [evolucaoMensal, saidasMes, categoriaTopMes, entradasMes, saldoMes, taxaPoupanca, metas])
+  const evolucaoMensal = homeResumo?.evolucaoMensal ?? []
+  const objetivoIdealReserva = homeResumo?.reservaPlanejamento.objetivoIdeal ?? 0
+  const coberturaReservaMeses = homeResumo?.reservaPlanejamento.coberturaMeses ?? 0
+  const faltanteReservaIdeal = homeResumo?.reservaPlanejamento.faltanteIdeal ?? 0
+  const categoriasChart = homeResumo?.categoriasChart ?? []
+  const alertasInteligentes = homeResumo?.alertas ?? []
 
   const checklistConcluidos = checklist.filter((item) => item.concluido).length
   const progressoChecklist = checklist.length > 0
@@ -1324,115 +1164,14 @@ export default function Home() {
         )}
 
         {aba === 'evolucao' && (
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-              <FluxoCard
-                titulo="Diogo"
-                icon={<Briefcase size={20} />}
-                iconWrap="border-indigo-100 bg-indigo-50"
-                iconColor="text-indigo-600"
-                transacoes={resumo?.transacoesEu ?? []}
-              />
-
-              <FluxoCard
-                titulo="Beatriz"
-                icon={<Wallet size={20} />}
-                iconWrap="border-pink-100 bg-pink-50"
-                iconColor="text-pink-600"
-                transacoes={resumo?.transacoesDela ?? []}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.5fr_1fr]">
-              <Card className="p-6">
-                <div className="mb-6 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Histórico visual</p>
-                    <h3 className="text-lg font-black uppercase italic text-slate-950">Evolução mensal do casal</h3>
-                  </div>
-                  <Badge label="12 meses" color="indigo" />
-                </div>
-
-                <div className="h-[320px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={evolucaoMensal}>
-                      <defs>
-                        <linearGradient id="saldoFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
-                          <stop offset="100%" stopColor="#6366f1" stopOpacity={0.04} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="mes" stroke="#94a3b8" tickLine={false} axisLine={false} />
-                      <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={(value) => `R$${Math.round(value / 1000)}k`} />
-                      <Tooltip formatter={(value: number) => fmt(Number(value))} contentStyle={{ borderRadius: 16, borderColor: '#e2e8f0' }} />
-                      <Area type="monotone" dataKey="entradas" stroke="#10b981" fill="transparent" strokeWidth={2} />
-                      <Area type="monotone" dataKey="saidas" stroke="#f43f5e" fill="transparent" strokeWidth={2} />
-                      <Area type="monotone" dataKey="saldo" stroke="#6366f1" fill="url(#saldoFill)" strokeWidth={3} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-
-              <Card className="p-6">
-                <div className="mb-6 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Composição</p>
-                    <h3 className="text-lg font-black uppercase italic text-slate-950">Saídas por categoria</h3>
-                  </div>
-                  <Badge label={`${categoriasChart.length} grupos`} color="pink" />
-                </div>
-
-                <div className="h-[280px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={categoriasChart} dataKey="value" nameKey="name" innerRadius={62} outerRadius={94} paddingAngle={3}>
-                        {categoriasChart.map((entry, index) => (
-                          <Cell key={entry.name} fill={entry.color ?? CHART_COLORS[index % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value: number) => fmt(Number(value))} contentStyle={{ borderRadius: 16, borderColor: '#e2e8f0' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="space-y-3">
-                  {categoriasChart.map((item) => (
-                    <div key={item.name} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
-                      <div className="flex items-center gap-3">
-                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
-                        <span className="text-xs font-black uppercase text-slate-700">{item.name}</span>
-                      </div>
-                      <span className="text-xs font-black text-slate-500">{fmt(item.value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
-
-            <Card className="p-6">
-              <div className="mb-6 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Comparativo</p>
-                  <h3 className="text-lg font-black uppercase italic text-slate-950">Diogo x Beatriz por mês</h3>
-                </div>
-                <Badge label="Saldos individuais" color="amber" />
-              </div>
-
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={evolucaoMensal} barGap={10}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="mes" stroke="#94a3b8" tickLine={false} axisLine={false} />
-                    <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={(value) => `R$${Math.round(value / 1000)}k`} />
-                    <Tooltip formatter={(value: number) => fmt(Number(value))} contentStyle={{ borderRadius: 16, borderColor: '#e2e8f0' }} />
-                    <Bar dataKey="diogo" name="Diogo" radius={[10, 10, 0, 0]} fill="#6366f1" />
-                    <Bar dataKey="beatriz" name="Beatriz" radius={[10, 10, 0, 0]} fill="#ec4899" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
-          </div>
+          <Suspense fallback={<SkeletonDashboard />}>
+            <HomeEvolutionSection
+              fluxoEu={fluxoEu}
+              fluxoDela={fluxoDela}
+              evolucaoMensal={evolucaoMensal}
+              categoriasChart={categoriasChart}
+            />
+          </Suspense>
         )}
       </div>
 

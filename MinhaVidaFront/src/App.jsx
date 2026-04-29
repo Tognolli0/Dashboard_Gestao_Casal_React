@@ -1,8 +1,9 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
 import { Heart, LayoutDashboard, PieChart, User } from 'lucide-react'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClient } from './lib/queryClient'
+import { DASHBOARD_HOME_QUERY_KEY, queryClient } from './lib/queryClient'
+import { getDashboardHomeResumo, getTransacoesGeraisPorPeriodo, getTransacoesPorPeriodo, warmUpAPI } from './services/api'
 import { SkeletonDashboard } from './components/ui'
 
 const Home = lazy(() => import('./pages/Home'))
@@ -11,6 +12,30 @@ const EspacoDela = lazy(() => import('./pages/EspacoDela'))
 const Categorias = lazy(() => import('./pages/Categorias'))
 
 function AppShell() {
+  useEffect(() => {
+    const now = new Date()
+    const mes = now.getMonth() + 1
+    const ano = now.getFullYear()
+
+    warmUpAPI().catch(() => undefined)
+    queryClient.prefetchQuery({
+      queryKey: DASHBOARD_HOME_QUERY_KEY,
+      queryFn: getDashboardHomeResumo,
+    })
+    queryClient.prefetchQuery({
+      queryKey: ['transacoes', 'Eu', ano, now.getMonth()],
+      queryFn: () => getTransacoesPorPeriodo('Eu', mes, ano),
+    })
+    queryClient.prefetchQuery({
+      queryKey: ['transacoes', 'Namorada', ano, now.getMonth()],
+      queryFn: () => getTransacoesPorPeriodo('Namorada', mes, ano),
+    })
+    queryClient.prefetchQuery({
+      queryKey: ['categorias-transacoes', ano, mes, 'Todos'],
+      queryFn: () => getTransacoesGeraisPorPeriodo(mes, ano, 'Todos'),
+    })
+  }, [])
+
   const menuItems = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/meu-espaco', label: 'Meu Espaco', icon: User },

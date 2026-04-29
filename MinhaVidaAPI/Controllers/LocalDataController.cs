@@ -100,6 +100,7 @@ public class LocalDataController : ControllerBase
         await transaction.CommitAsync();
 
         _cache.Remove(CacheKeys.DashboardResumo);
+        _cache.Remove(CacheKeys.DashboardHome);
 
         return Ok(new
         {
