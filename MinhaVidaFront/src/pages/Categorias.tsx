@@ -1,7 +1,7 @@
 ﻿import { useState } from 'react'
 import { BarChart, Briefcase, Calendar, Home as HomeIcon, PieChart, Search, TrendingUp } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { getTransacoesGeraisPorPeriodo } from '../services/api'
+import { getCachedTransacoesGeraisPorPeriodo, getTransacoesGeraisPorPeriodo } from '../services/api'
 import { sortTransactionsByDateDesc } from '../lib/dashboard'
 import { Badge, Spinner, fmt } from '../components/ui'
 import type { Transacao } from '../types/models'
@@ -15,6 +15,8 @@ export default function Categorias() {
   const { data: transacoesMes = [], isLoading } = useQuery<Transacao[]>({
     queryKey: ['categorias-transacoes', anoAtual, mesSelecionado, pessoaSelecionada],
     queryFn: () => getTransacoesGeraisPorPeriodo(mesSelecionado, anoAtual, pessoaSelecionada),
+    initialData: () => getCachedTransacoesGeraisPorPeriodo(mesSelecionado, anoAtual, pessoaSelecionada)?.data,
+    initialDataUpdatedAt: () => getCachedTransacoesGeraisPorPeriodo(mesSelecionado, anoAtual, pessoaSelecionada)?.savedAt,
   })
 
   const termoBusca = filtroTexto.trim().toLowerCase()

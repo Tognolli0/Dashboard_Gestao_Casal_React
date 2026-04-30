@@ -2,7 +2,7 @@
 import { AlertTriangle, CheckCheck, ClipboardList, DollarSign, Download, PiggyBank, Plus, RotateCcw, Shield, ShoppingBag, Sparkles, Target, Trash2, TrendingUp, Upload } from 'lucide-react'
 import { Suspense, lazy } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { addChecklistItem, baixarBackupLocal, deleteChecklistItem, deleteDesejo, deleteMeta, getChecklistMensal, getDashboardHomeEvolution, getDashboardHomeResumo, postDesejo, postMeta, realizarAporte, resetChecklistMensal, restaurarBackupLocal, updateChecklistItem } from '../services/api'
+import { addChecklistItem, baixarBackupLocal, deleteChecklistItem, deleteDesejo, deleteMeta, getCachedDashboardHomeEvolution, getCachedDashboardHomeResumo, getChecklistMensal, getDashboardHomeEvolution, getDashboardHomeResumo, postDesejo, postMeta, realizarAporte, resetChecklistMensal, restaurarBackupLocal, updateChecklistItem } from '../services/api'
 import { DASHBOARD_HOME_EVOLUTION_QUERY_KEY, DASHBOARD_HOME_QUERY_KEY, DASHBOARD_QUERY_KEY } from '../lib/queryClient'
 import { Badge, Btn, Card, Input, Modal, ProgressBar, SkeletonDashboard, StatCard, fmt } from '../components/ui'
 import type { ChecklistItem, DashboardFluxoResumo, DashboardHomeEvolution, DashboardHomeOverview, DashboardResumo, Desejo, Meta } from '../types/models'
@@ -232,11 +232,15 @@ export default function Home() {
   const { data: homeResumo, isLoading } = useQuery<DashboardHomeOverview>({
     queryKey: DASHBOARD_HOME_QUERY_KEY,
     queryFn: getDashboardHomeResumo,
+    initialData: () => getCachedDashboardHomeResumo()?.data,
+    initialDataUpdatedAt: () => getCachedDashboardHomeResumo()?.savedAt,
   })
   const { data: homeEvolution } = useQuery<DashboardHomeEvolution>({
     queryKey: DASHBOARD_HOME_EVOLUTION_QUERY_KEY,
     queryFn: getDashboardHomeEvolution,
     enabled: aba === 'evolucao',
+    initialData: () => getCachedDashboardHomeEvolution()?.data,
+    initialDataUpdatedAt: () => getCachedDashboardHomeEvolution()?.savedAt,
   })
   const mesChecklist = new Date().toISOString().slice(0, 7)
 

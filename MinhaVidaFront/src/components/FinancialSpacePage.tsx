@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { deleteTransacao, getTransacoesPorPeriodo, postTransacao } from '../services/api'
+import { deleteTransacao, getCachedTransacoesPorPeriodo, getTransacoesPorPeriodo, postTransacao } from '../services/api'
 import { DASHBOARD_QUERY_KEY } from '../lib/queryClient'
 import {
   appendTransaction,
@@ -81,6 +81,8 @@ export default function FinancialSpacePage({
   const { data: lista = [], isLoading } = useQuery({
     queryKey: ['transacoes', responsavel, anoAtual, mes],
     queryFn: () => getTransacoesPorPeriodo(responsavel, mes + 1, anoAtual),
+    initialData: () => getCachedTransacoesPorPeriodo(responsavel, mes + 1, anoAtual)?.data,
+    initialDataUpdatedAt: () => getCachedTransacoesPorPeriodo(responsavel, mes + 1, anoAtual)?.savedAt,
   })
 
   const saveMutation = useMutation({

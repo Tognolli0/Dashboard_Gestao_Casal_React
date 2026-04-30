@@ -1,5 +1,6 @@
 import axios from 'axios'
 import type { ChecklistItem, DashboardHomeEvolution, DashboardHomeOverview, DashboardResumo, Desejo, Meta, Transacao } from '../types/models'
+import { readCachedValue, writeCachedValue } from '../lib/persistedApiCache'
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ??
@@ -30,6 +31,14 @@ api.interceptors.response.use(
 )
 
 let warmupPromise: Promise<unknown> | null = null
+const CACHE_MAX_AGE = 1000 * 60 * 60 * 12
+
+const cacheKeys = {
+  homeOverview: 'dashboard-home-overview',
+  homeEvolution: 'dashboard-home-evolution',
+  transacoesPeriodo: (responsavel: 'Eu' | 'Namorada', mes: number, ano: number) => `transacoes-${responsavel}-${ano}-${mes}`,
+  transacoesGerais: (mes: number, ano: number, responsavel?: 'Eu' | 'Namorada' | 'Todos') => `transacoes-gerais-${responsavel ?? 'Todos'}-${ano}-${mes}`,
+}
 
 export function warmUpAPI() {
   if (warmupPromise) return warmupPromise
@@ -38,14 +47,38 @@ export function warmUpAPI() {
   return warmupPromise
 }
 
+export const getCachedDashboardHomeResumo = () =>
+  readCachedValue<DashboardHomeOverview>(cacheKeys.homeOverview, CACHE_MAX_AGE)
+
+export const getCachedDashboardHomeEvolution = () =>
+  readCachedValue<DashboardHomeEvolution>(cacheKeys.homeEvolution, CACHE_MAX_AGE)
+
+export const getCachedTransacoesPorPeriodo = (
+  responsavel: 'Eu' | 'Namorada',
+  mes: number,
+  ano: number,
+) => readCachedValue<Transacao[]>(cacheKeys.transacoesPeriodo(responsavel, mes, ano), CACHE_MAX_AGE)
+
+export const getCachedTransacoesGeraisPorPeriodo = (
+  mes: number,
+  ano: number,
+  responsavel?: 'Eu' | 'Namorada' | 'Todos',
+) => readCachedValue<Transacao[]>(cacheKeys.transacoesGerais(mes, ano, responsavel), CACHE_MAX_AGE)
+
 export const getDashboardResumo = (): Promise<DashboardResumo> =>
   api.get('/api/dashboard/resumo').then((response) => response.data)
 
 export const getDashboardHomeResumo = (): Promise<DashboardHomeOverview> =>
-  api.get('/api/dashboard/home').then((response) => response.data)
+  api.get('/api/dashboard/home').then((response) => {
+    writeCachedValue(cacheKeys.homeOverview, response.data)
+    return response.data
+  })
 
 export const getDashboardHomeEvolution = (): Promise<DashboardHomeEvolution> =>
-  api.get('/api/dashboard/evolution').then((response) => response.data)
+  api.get('/api/dashboard/evolution').then((response) => {
+    writeCachedValue(cacheKeys.homeEvolution, response.data)
+    return response.data
+  })
 
 export const getTransacoes = (responsavel: string): Promise<Transacao[]> =>
   api.get(`/api/transacoes/${responsavel}`).then((response) => response.data)
@@ -57,7 +90,10 @@ export const getTransacoesPorPeriodo = (
 ): Promise<Transacao[]> =>
   api.get(`/api/transacoes/${responsavel}`, {
     params: { mes, ano },
-  }).then((response) => response.data)
+  }).then((response) => {
+    writeCachedValue(cacheKeys.transacoesPeriodo(responsavel, mes, ano), response.data)
+    return response.data
+  })
 
 export const getTransacoesGeraisPorPeriodo = (
   mes: number,
@@ -70,7 +106,10 @@ export const getTransacoesGeraisPorPeriodo = (
       ano,
       responsavel: responsavel && responsavel !== 'Todos' ? responsavel : undefined,
     },
-  }).then((response) => response.data)
+  }).then((response) => {
+    writeCachedValue(cacheKeys.transacoesGerais(mes, ano, responsavel), response.data)
+    return response.data
+  })
 
 export const getMetas = (): Promise<Meta[]> =>
   api.get('/api/metas').then((response) => response.data)
