@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCheck, ClipboardList, DollarSign, Download, PiggyBa
 import { Suspense, lazy } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addChecklistItem, baixarBackupLocal, deleteChecklistItem, deleteDesejo, deleteMeta, getCachedDashboardHomeEvolution, getCachedDashboardHomeResumo, getChecklistMensal, getDashboardHomeEvolution, getDashboardHomeResumo, postDesejo, postMeta, realizarAporte, resetChecklistMensal, restaurarBackupLocal, updateChecklistItem } from '../services/api'
+import { writeCachedValue } from '../lib/persistedApiCache'
 import { DASHBOARD_HOME_EVOLUTION_QUERY_KEY, DASHBOARD_HOME_QUERY_KEY, DASHBOARD_QUERY_KEY } from '../lib/queryClient'
 import { Badge, Btn, Card, Input, Modal, ProgressBar, SkeletonDashboard, StatCard, fmt } from '../components/ui'
 import type { ChecklistItem, DashboardFluxoResumo, DashboardHomeEvolution, DashboardHomeOverview, DashboardResumo, Desejo, Meta } from '../types/models'
@@ -24,6 +25,55 @@ function getBarHeight(value: number, max: number) {
   if (value <= 0 || max <= 0) return 14
   const normalized = value / max
   return Math.round(14 + normalized * 150)
+}
+
+function roundTo(value: number, digits: number) {
+  const factor = 10 ** digits
+  return Math.round(value * factor) / factor
+}
+
+function rebuildHomeOverview(
+  current: DashboardHomeOverview,
+  {
+    metas = current.metas,
+    desejos = current.desejos,
+  }: {
+    metas?: Meta[]
+    desejos?: Desejo[]
+  },
+): DashboardHomeOverview {
+  const reservaEmergencia = metas.find((meta) => meta.ehReservaEmergencia) ?? null
+  const metasAtivas = metas.filter((meta) => !meta.ehReservaEmergencia)
+  const totalMetas = metasAtivas.reduce((sum, meta) => sum + meta.valorObjetivo, 0)
+  const totalGuardado = metasAtivas.reduce((sum, meta) => sum + meta.valorGuardado, 0)
+  const progresso = totalMetas > 0 ? Math.round((totalGuardado / totalMetas) * 100) : 0
+  const concluidas = metasAtivas.filter((meta) => meta.valorGuardado >= meta.valorObjetivo).length
+  const objetivoIdeal = current.reservaPlanejamento.objetivoIdeal
+  const mediaSaidasRecentes = objetivoIdeal > 0 ? objetivoIdeal / 6 : 0
+  const coberturaMeses = mediaSaidasRecentes > 0 && reservaEmergencia
+    ? reservaEmergencia.valorGuardado / mediaSaidasRecentes
+    : 0
+  const faltanteIdeal = Math.max(objetivoIdeal - (reservaEmergencia?.valorGuardado ?? 0), 0)
+
+  return {
+    ...current,
+    metas,
+    desejos,
+    reservaEmergencia,
+    metasResumo: {
+      ...current.metasResumo,
+      totalMetas: roundTo(totalMetas, 2),
+      totalGuardado: roundTo(totalGuardado, 2),
+      progresso,
+      concluidas,
+      bucketsAbertos: desejos.filter((item) => !item.concluido).length,
+    },
+    reservaPlanejamento: {
+      ...current.reservaPlanejamento,
+      coberturaMeses: roundTo(coberturaMeses, 1),
+      faltanteIdeal: roundTo(faltanteIdeal, 2),
+    },
+  }
 }
 
 function FluxoCard({
@@ -228,6 +278,14 @@ export default function Home() {
     invalidateHomeResumo()
     invalidateHomeEvolution()
   }
+  const setHomeResumoCache = (updater: (current: DashboardHomeOverview) => DashboardHomeOverview) => {
+    queryClient.setQueryData<DashboardHomeOverview | undefined>(DASHBOARD_HOME_QUERY_KEY, (current) => {
+      if (!current) return current
+      const next = updater(current)
+      writeCachedValue('dashboard-home-overview', next)
+      return next
+    })
+  }
 
   const { data: homeResumo, isLoading } = useQuery<DashboardHomeOverview>({
     queryKey: DASHBOARD_HOME_QUERY_KEY,
@@ -260,16 +318,18 @@ export default function Home() {
             .concat(savedMeta),
         })),
       )
+      setHomeResumoCache((current) => rebuildHomeOverview(current, {
+        metas: current.metas.filter((meta) => meta.id > 0).concat(savedMeta),
+      }))
       setModalMeta(false)
       setNovaMeta(FORM_META_VAZIO)
       setModoMeta('meta')
       setErroMeta('')
-      invalidateHomeDashboards()
     },
     onError: (error: any) => {
       queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY })
       setErroMeta(error?.response?.data ?? 'Erro ao salvar meta.')
-      invalidateHomeDashboards()
+      invalidateHomeResumo()
     },
   })
 
@@ -277,7 +337,9 @@ export default function Home() {
     mutationFn: deleteMeta,
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: DASHBOARD_QUERY_KEY })
+      await queryClient.cancelQueries({ queryKey: DASHBOARD_HOME_QUERY_KEY })
       const previous = queryClient.getQueryData<DashboardResumo>(DASHBOARD_QUERY_KEY)
+      const previousHomeResumo = queryClient.getQueryData<DashboardHomeOverview>(DASHBOARD_HOME_QUERY_KEY)
 
       queryClient.setQueryData<DashboardResumo | undefined>(DASHBOARD_QUERY_KEY, (current) =>
         mutateResumo(current, (data) => ({
@@ -285,22 +347,29 @@ export default function Home() {
           metas: data.metas.filter((meta) => meta.id !== id),
         })),
       )
+      setHomeResumoCache((current) => rebuildHomeOverview(current, {
+        metas: current.metas.filter((meta) => meta.id !== id),
+      }))
 
-      return { previous }
+      return { previous, previousHomeResumo }
     },
     onError: (_error, _id, context) => {
       if (context?.previous) {
         queryClient.setQueryData(DASHBOARD_QUERY_KEY, context.previous)
       }
+      if (context?.previousHomeResumo) {
+        queryClient.setQueryData(DASHBOARD_HOME_QUERY_KEY, context.previousHomeResumo)
+      }
     },
-    onSettled: invalidateHomeResumo,
   })
 
   const aporteMutation = useMutation({
     mutationFn: ({ id, valor }: { id: number; valor: number }) => realizarAporte(id, valor),
     onMutate: async ({ id, valor }) => {
       await queryClient.cancelQueries({ queryKey: DASHBOARD_QUERY_KEY })
+      await queryClient.cancelQueries({ queryKey: DASHBOARD_HOME_QUERY_KEY })
       const previous = queryClient.getQueryData<DashboardResumo>(DASHBOARD_QUERY_KEY)
+      const previousHomeResumo = queryClient.getQueryData<DashboardHomeOverview>(DASHBOARD_HOME_QUERY_KEY)
 
       queryClient.setQueryData<DashboardResumo | undefined>(DASHBOARD_QUERY_KEY, (current) =>
         mutateResumo(current, (data) => ({
@@ -314,28 +383,40 @@ export default function Home() {
           }),
         })),
       )
+      setHomeResumoCache((current) => rebuildHomeOverview(current, {
+        metas: current.metas.map((meta) => (
+          meta.id !== id
+            ? meta
+            : { ...meta, valorGuardado: Math.min(meta.valorGuardado + valor, meta.valorObjetivo) }
+        )),
+      }))
 
-      return { previous }
+      return { previous, previousHomeResumo }
     },
     onSuccess: (savedMeta) => {
       queryClient.setQueryData<DashboardResumo | undefined>(DASHBOARD_QUERY_KEY, (current) =>
         mutateResumo(current, (data) => ({
           ...data,
           metas: data.metas.map((meta) => (meta.id === savedMeta.id ? savedMeta : meta)),
-        })),
+            })),
       )
+      setHomeResumoCache((current) => rebuildHomeOverview(current, {
+        metas: current.metas.map((meta) => (meta.id === savedMeta.id ? savedMeta : meta)),
+      }))
       setMetaSelecionada(savedMeta)
       setValorAporte('')
       setErroAporte('')
       setModalAporte(false)
-      invalidateHomeDashboards()
     },
     onError: (error: any, _variables, context) => {
       if (context?.previous) {
         queryClient.setQueryData(DASHBOARD_QUERY_KEY, context.previous)
       }
+      if (context?.previousHomeResumo) {
+        queryClient.setQueryData(DASHBOARD_HOME_QUERY_KEY, context.previousHomeResumo)
+      }
       setErroAporte(error?.response?.data ?? 'Erro ao registrar aporte.')
-      invalidateHomeDashboards()
+      invalidateHomeResumo()
     },
   })
 
@@ -350,15 +431,17 @@ export default function Home() {
             .concat(savedDesejo),
         })),
       )
+      setHomeResumoCache((current) => rebuildHomeOverview(current, {
+        desejos: current.desejos.filter((desejo) => desejo.id > 0).concat(savedDesejo),
+      }))
       setModalDesejo(false)
       setNovoDesejo(FORM_DESEJO_VAZIO)
       setErroDesejo('')
-      invalidateHomeDashboards()
     },
     onError: (error: any) => {
       queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY })
       setErroDesejo(error?.response?.data ?? 'Erro ao salvar desejo.')
-      invalidateHomeDashboards()
+      invalidateHomeResumo()
     },
   })
 
@@ -366,7 +449,9 @@ export default function Home() {
     mutationFn: deleteDesejo,
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: DASHBOARD_QUERY_KEY })
+      await queryClient.cancelQueries({ queryKey: DASHBOARD_HOME_QUERY_KEY })
       const previous = queryClient.getQueryData<DashboardResumo>(DASHBOARD_QUERY_KEY)
+      const previousHomeResumo = queryClient.getQueryData<DashboardHomeOverview>(DASHBOARD_HOME_QUERY_KEY)
 
       queryClient.setQueryData<DashboardResumo | undefined>(DASHBOARD_QUERY_KEY, (current) =>
         mutateResumo(current, (data) => ({
@@ -374,21 +459,28 @@ export default function Home() {
           desejos: data.desejos.filter((desejo) => desejo.id !== id),
         })),
       )
+      setHomeResumoCache((current) => rebuildHomeOverview(current, {
+        desejos: current.desejos.filter((desejo) => desejo.id !== id),
+      }))
 
-      return { previous }
+      return { previous, previousHomeResumo }
     },
     onError: (_error, _id, context) => {
       if (context?.previous) {
         queryClient.setQueryData(DASHBOARD_QUERY_KEY, context.previous)
       }
+      if (context?.previousHomeResumo) {
+        queryClient.setQueryData(DASHBOARD_HOME_QUERY_KEY, context.previousHomeResumo)
+      }
     },
-    onSettled: invalidateHomeResumo,
   })
 
   const addChecklistMutation = useMutation({
     mutationFn: addChecklistItem,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [...CHECKLIST_QUERY_KEY, mesChecklist] })
+    onSuccess: (savedItem) => {
+      queryClient.setQueryData<ChecklistItem[]>([...CHECKLIST_QUERY_KEY, mesChecklist], (current = []) =>
+        [...current, savedItem].sort((a, b) => a.ordem - b.ordem),
+      )
       setNovoItemChecklist('')
       setErroRotina('')
     },
@@ -419,10 +511,18 @@ export default function Home() {
 
   const deleteChecklistMutation = useMutation({
     mutationFn: deleteChecklistItem,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [...CHECKLIST_QUERY_KEY, mesChecklist] })
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: [...CHECKLIST_QUERY_KEY, mesChecklist] })
+      const previous = queryClient.getQueryData<ChecklistItem[]>([...CHECKLIST_QUERY_KEY, mesChecklist])
+      queryClient.setQueryData<ChecklistItem[]>([...CHECKLIST_QUERY_KEY, mesChecklist], (current = []) =>
+        current.filter((item) => item.id !== id),
+      )
+      return { previous }
     },
-    onError: () => {
+    onError: (_error, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData([...CHECKLIST_QUERY_KEY, mesChecklist], context.previous)
+      }
       setErroRotina('Nao foi possivel remover o item do checklist.')
     },
   })

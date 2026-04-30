@@ -110,7 +110,7 @@ export default function FinancialSpacePage({
       return { previousTransactions, previousDashboard, optimisticId: optimisticTransaction.id }
     },
     onSuccess: (savedTransaction, _payload, context) => {
-      queryClient.setQueryData<Transacao[]>(['transacoes', responsavel], (current = []) =>
+      queryClient.setQueryData<Transacao[]>(['transacoes', responsavel, anoAtual, mes], (current = []) =>
         replaceTransaction(current, context?.optimisticId ?? savedTransaction.id, savedTransaction),
       )
 
