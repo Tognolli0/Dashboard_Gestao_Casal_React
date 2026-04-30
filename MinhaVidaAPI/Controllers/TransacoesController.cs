@@ -38,14 +38,10 @@ namespace MinhaVidaAPI.Controllers
                 query = query.Where(t => t.Responsavel == responsavel);
             }
 
-            if (ano.HasValue)
+            if (mes.HasValue || ano.HasValue)
             {
-                query = query.Where(t => t.Data.Year == ano.Value);
-            }
-
-            if (mes.HasValue)
-            {
-                query = query.Where(t => t.Data.Month == mes.Value);
+                var (inicioPeriodo, fimPeriodo) = BuildPeriodoUtc(mes, ano);
+                query = query.Where(t => t.Data >= inicioPeriodo && t.Data < fimPeriodo);
             }
 
             var transacoes = await query
@@ -65,15 +61,8 @@ namespace MinhaVidaAPI.Controllers
                     .AsNoTracking()
                     .Where(t => t.Responsavel == responsavel);
 
-                if (ano.HasValue)
-                {
-                    query = query.Where(t => t.Data.Year == ano.Value);
-                }
-
-                if (mes.HasValue)
-                {
-                    query = query.Where(t => t.Data.Month == mes.Value);
-                }
+                var (inicioPeriodo, fimPeriodo) = BuildPeriodoUtc(mes, ano);
+                query = query.Where(t => t.Data >= inicioPeriodo && t.Data < fimPeriodo);
 
                 var transacoesFiltradas = await query
                     .OrderByDescending(t => t.Data)
@@ -210,6 +199,15 @@ namespace MinhaVidaAPI.Controllers
             _cache.Remove(CacheKeys.DashboardHomeEvolution);
             _cache.Remove(CacheKeys.Transacoes("Eu"));
             _cache.Remove(CacheKeys.Transacoes("Namorada"));
+        }
+
+        private static (DateTime inicio, DateTime fim) BuildPeriodoUtc(int? mes, int? ano)
+        {
+            var referencia = DateTime.UtcNow;
+            var anoReferencia = ano ?? referencia.Year;
+            var mesReferencia = mes ?? referencia.Month;
+            var inicio = new DateTime(anoReferencia, mesReferencia, 1, 0, 0, 0, DateTimeKind.Utc);
+            return (inicio, inicio.AddMonths(1));
         }
     }
 }

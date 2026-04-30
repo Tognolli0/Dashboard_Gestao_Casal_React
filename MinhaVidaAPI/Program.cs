@@ -257,6 +257,11 @@ static async Task EnsurePostgresSchemaAsync(AppDbContext db)
 
         CREATE INDEX IF NOT EXISTS "IX_checklist_items_MesReferencia" ON checklist_items ("MesReferencia");
         CREATE INDEX IF NOT EXISTS "IX_checklist_items_MesReferencia_Ordem" ON checklist_items ("MesReferencia", "Ordem");
+        CREATE INDEX IF NOT EXISTS "IX_transacoes_Data" ON transacoes ("Data");
+        CREATE INDEX IF NOT EXISTS "IX_transacoes_Responsavel" ON transacoes ("Responsavel");
+        CREATE INDEX IF NOT EXISTS "IX_transacoes_Responsavel_Data" ON transacoes ("Responsavel", "Data");
+        CREATE INDEX IF NOT EXISTS "IX_transacoes_Tipo_Data" ON transacoes ("Tipo", "Data");
+        CREATE INDEX IF NOT EXISTS "IX_transacoes_Categoria_Data" ON transacoes ("Categoria", "Data");
         """;
 
     await db.Database.ExecuteSqlRawAsync(sql);
