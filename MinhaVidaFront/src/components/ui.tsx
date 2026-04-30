@@ -73,10 +73,11 @@ export function Modal({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
             <div className="relative bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-md shadow-2xl animate-fade-up">
-                <button
-                    onClick={onClose}
-                    className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-lg leading-none"
-                >
+        <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-lg leading-none"
+        >
                     ✕
                 </button>
                 <h3 className="text-base font-black text-slate-900 mb-4 italic tracking-tight">{title}</h3>
@@ -102,6 +103,7 @@ export function Btn({
     }
     return (
         <button
+            type="button"
             onClick={onClick}
             disabled={disabled}
             className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-40 active:scale-95 ${v[variant]} ${className}`}

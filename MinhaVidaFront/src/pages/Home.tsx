@@ -733,6 +733,7 @@ export default function Home() {
         {(['metas', 'reserva', 'buckets', 'evolucao', 'backup', 'rotina'] as const).map((tab) => (
           <button
             key={tab}
+            type="button"
             onClick={() => setAba(tab)}
             className={`rounded-xl px-6 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${
               aba === tab ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'
@@ -773,6 +774,7 @@ export default function Home() {
                   return (
                     <Card key={meta.id} className="group relative p-6 transition-all hover:border-indigo-300">
                       <button
+                        type="button"
                         onClick={() => confirm('Remover esta meta?') && deleteMetaMutation.mutate(meta.id)}
                         disabled={deleteMetaMutation.isPending}
                         className="absolute right-3 top-3 text-slate-400 opacity-0 transition-all hover:text-red-500 disabled:opacity-30 group-hover:opacity-100"
@@ -894,6 +896,7 @@ export default function Home() {
                       </div>
 
                       <button
+                        type="button"
                         onClick={() => confirm('Remover a reserva de emergência?') && deleteMetaMutation.mutate(reservaEmergencia.id)}
                         disabled={deleteMetaMutation.isPending}
                         className="rounded-2xl border border-rose-100 bg-white px-4 py-2 text-[11px] font-black uppercase tracking-widest text-rose-500 transition hover:bg-rose-50 disabled:opacity-40"
@@ -986,6 +989,7 @@ export default function Home() {
               {desejos.map((desejo: Desejo) => (
                 <Card key={desejo.id} className="group relative overflow-hidden p-0 transition-all hover:border-indigo-300">
                   <button
+                    type="button"
                     onClick={() => confirm('Remover?') && deleteDesejoMutation.mutate(desejo.id)}
                     disabled={deleteDesejoMutation.isPending}
                     className="absolute right-2 top-2 z-10 rounded-lg bg-white p-1.5 text-slate-400 opacity-0 shadow-sm transition-all hover:text-red-500 disabled:opacity-30 group-hover:opacity-100"
@@ -1013,6 +1017,7 @@ export default function Home() {
               ))}
 
               <button
+                type="button"
                 onClick={() => { setErroDesejo(''); setModalDesejo(true) }}
                 className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 p-8 text-slate-400 transition-all hover:border-indigo-300 hover:bg-indigo-50/30 hover:text-indigo-600"
               >
@@ -1126,6 +1131,7 @@ export default function Home() {
                 {checklist.map((item) => (
                   <div key={item.id} className={`flex items-center gap-3 rounded-2xl border px-4 py-3 transition-all ${item.concluido ? 'border-emerald-100 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
                     <button
+                      type="button"
                       onClick={() => handleToggleChecklist(item)}
                       className={`flex h-10 w-10 items-center justify-center rounded-2xl border transition-all ${item.concluido ? 'border-emerald-200 bg-emerald-500 text-white' : 'border-slate-200 bg-slate-50 text-slate-400 hover:border-indigo-200 hover:text-indigo-600'}`}
                     >
@@ -1140,6 +1146,7 @@ export default function Home() {
                       </p>
                     </div>
                     <button
+                      type="button"
                       onClick={() => confirm('Remover essa tarefa do checklist?') && deleteChecklistMutation.mutate(item.id)}
                       className="rounded-xl border border-rose-100 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-rose-500 transition hover:bg-rose-50"
                     >
