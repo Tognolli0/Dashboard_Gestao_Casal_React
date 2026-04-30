@@ -101,6 +101,8 @@ public class LocalDataController : ControllerBase
 
         _cache.Remove(CacheKeys.DashboardResumo);
         _cache.Remove(CacheKeys.DashboardHome);
+        _cache.Remove(CacheKeys.DashboardHomeOverview);
+        _cache.Remove(CacheKeys.DashboardHomeEvolution);
 
         return Ok(new
         {

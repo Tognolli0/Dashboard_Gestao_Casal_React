@@ -4,6 +4,8 @@ namespace MinhaVidaAPI.Services
     {
         public const string DashboardResumo = "dashboard-resumo";
         public const string DashboardHome = "dashboard-home";
+        public const string DashboardHomeOverview = "dashboard-home-overview";
+        public const string DashboardHomeEvolution = "dashboard-home-evolution";
         public const string Metas = "metas";
         public const string Desejos = "desejos";
 

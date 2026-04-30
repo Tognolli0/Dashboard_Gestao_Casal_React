@@ -2,10 +2,10 @@
 import { AlertTriangle, CheckCheck, ClipboardList, DollarSign, Download, PiggyBank, Plus, RotateCcw, Shield, ShoppingBag, Sparkles, Target, Trash2, TrendingUp, Upload } from 'lucide-react'
 import { Suspense, lazy } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { addChecklistItem, baixarBackupLocal, deleteChecklistItem, deleteDesejo, deleteMeta, getChecklistMensal, getDashboardHomeResumo, postDesejo, postMeta, realizarAporte, resetChecklistMensal, restaurarBackupLocal, updateChecklistItem } from '../services/api'
-import { DASHBOARD_HOME_QUERY_KEY, DASHBOARD_QUERY_KEY } from '../lib/queryClient'
+import { addChecklistItem, baixarBackupLocal, deleteChecklistItem, deleteDesejo, deleteMeta, getChecklistMensal, getDashboardHomeEvolution, getDashboardHomeResumo, postDesejo, postMeta, realizarAporte, resetChecklistMensal, restaurarBackupLocal, updateChecklistItem } from '../services/api'
+import { DASHBOARD_HOME_EVOLUTION_QUERY_KEY, DASHBOARD_HOME_QUERY_KEY, DASHBOARD_QUERY_KEY } from '../lib/queryClient'
 import { Badge, Btn, Card, Input, Modal, ProgressBar, SkeletonDashboard, StatCard, fmt } from '../components/ui'
-import type { ChecklistItem, DashboardFluxoResumo, DashboardHomeResumo, DashboardResumo, Desejo, Meta } from '../types/models'
+import type { ChecklistItem, DashboardFluxoResumo, DashboardHomeEvolution, DashboardHomeOverview, DashboardResumo, Desejo, Meta } from '../types/models'
 
 const FORM_META_VAZIO = { titulo: '', valorObjetivo: '', valorGuardado: '0', responsavel: 'Casal', ehReservaEmergencia: false }
 const FORM_DESEJO_VAZIO = { titulo: '', dataAlvo: '', icone: '*' }
@@ -223,10 +223,20 @@ export default function Home() {
   const [statusRotina, setStatusRotina] = useState('')
 
   const invalidateHomeResumo = () => queryClient.invalidateQueries({ queryKey: DASHBOARD_HOME_QUERY_KEY })
+  const invalidateHomeEvolution = () => queryClient.invalidateQueries({ queryKey: DASHBOARD_HOME_EVOLUTION_QUERY_KEY })
+  const invalidateHomeDashboards = () => {
+    invalidateHomeResumo()
+    invalidateHomeEvolution()
+  }
 
-  const { data: homeResumo, isLoading } = useQuery<DashboardHomeResumo>({
+  const { data: homeResumo, isLoading } = useQuery<DashboardHomeOverview>({
     queryKey: DASHBOARD_HOME_QUERY_KEY,
     queryFn: getDashboardHomeResumo,
+  })
+  const { data: homeEvolution } = useQuery<DashboardHomeEvolution>({
+    queryKey: DASHBOARD_HOME_EVOLUTION_QUERY_KEY,
+    queryFn: getDashboardHomeEvolution,
+    enabled: aba === 'evolucao',
   })
   const mesChecklist = new Date().toISOString().slice(0, 7)
 
@@ -250,12 +260,12 @@ export default function Home() {
       setNovaMeta(FORM_META_VAZIO)
       setModoMeta('meta')
       setErroMeta('')
-      invalidateHomeResumo()
+      invalidateHomeDashboards()
     },
     onError: (error: any) => {
       queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY })
       setErroMeta(error?.response?.data ?? 'Erro ao salvar meta.')
-      invalidateHomeResumo()
+      invalidateHomeDashboards()
     },
   })
 
@@ -314,14 +324,14 @@ export default function Home() {
       setValorAporte('')
       setErroAporte('')
       setModalAporte(false)
-      invalidateHomeResumo()
+      invalidateHomeDashboards()
     },
     onError: (error: any, _variables, context) => {
       if (context?.previous) {
         queryClient.setQueryData(DASHBOARD_QUERY_KEY, context.previous)
       }
       setErroAporte(error?.response?.data ?? 'Erro ao registrar aporte.')
-      invalidateHomeResumo()
+      invalidateHomeDashboards()
     },
   })
 
@@ -339,12 +349,12 @@ export default function Home() {
       setModalDesejo(false)
       setNovoDesejo(FORM_DESEJO_VAZIO)
       setErroDesejo('')
-      invalidateHomeResumo()
+      invalidateHomeDashboards()
     },
     onError: (error: any) => {
       queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY })
       setErroDesejo(error?.response?.data ?? 'Erro ao salvar desejo.')
-      invalidateHomeResumo()
+      invalidateHomeDashboards()
     },
   })
 
@@ -448,7 +458,7 @@ export default function Home() {
     mutationFn: restaurarBackupLocal,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY })
-      invalidateHomeResumo()
+      invalidateHomeDashboards()
       queryClient.invalidateQueries({ queryKey: [...CHECKLIST_QUERY_KEY, mesChecklist] })
       setStatusRotina('Backup restaurado com sucesso.')
       setErroRotina('')
@@ -471,8 +481,8 @@ export default function Home() {
   const totalBia = homeResumo?.totais.bia ?? 0
   const totalJuntos = homeResumo?.totais.juntos ?? 0
 
-  const fluxoEu = homeResumo?.fluxoEu ?? { entradas: 0, saidas: 0, saldo: 0 }
-  const fluxoDela = homeResumo?.fluxoDela ?? { entradas: 0, saidas: 0, saldo: 0 }
+  const fluxoEu = homeEvolution?.fluxoEu ?? { entradas: 0, saidas: 0, saldo: 0 }
+  const fluxoDela = homeEvolution?.fluxoDela ?? { entradas: 0, saidas: 0, saldo: 0 }
 
   const entradasMes = homeResumo?.mesAtual.entradas ?? 0
   const saidasMes = homeResumo?.mesAtual.saidas ?? 0
@@ -490,11 +500,11 @@ export default function Home() {
   const destaquePrincipal = homeResumo?.destaquePrincipal ?? 'Carregando visão consolidada do casal.'
   const acaoRecomendada = homeResumo?.acaoRecomendada ?? 'Assim que os dados entrarem, o painel mostra a melhor próxima ação.'
 
-  const evolucaoMensal = homeResumo?.evolucaoMensal ?? []
+  const evolucaoMensal = homeEvolution?.evolucaoMensal ?? []
   const objetivoIdealReserva = homeResumo?.reservaPlanejamento.objetivoIdeal ?? 0
   const coberturaReservaMeses = homeResumo?.reservaPlanejamento.coberturaMeses ?? 0
   const faltanteReservaIdeal = homeResumo?.reservaPlanejamento.faltanteIdeal ?? 0
-  const categoriasChart = homeResumo?.categoriasChart ?? []
+  const categoriasChart = homeEvolution?.categoriasChart ?? []
   const alertasInteligentes = homeResumo?.alertas ?? []
 
   const checklistConcluidos = checklist.filter((item) => item.concluido).length

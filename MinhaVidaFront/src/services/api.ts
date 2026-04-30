@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { ChecklistItem, DashboardHomeResumo, DashboardResumo, Desejo, Meta, Transacao } from '../types/models'
+import type { ChecklistItem, DashboardHomeEvolution, DashboardHomeOverview, DashboardResumo, Desejo, Meta, Transacao } from '../types/models'
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ??
@@ -41,8 +41,11 @@ export function warmUpAPI() {
 export const getDashboardResumo = (): Promise<DashboardResumo> =>
   api.get('/api/dashboard/resumo').then((response) => response.data)
 
-export const getDashboardHomeResumo = (): Promise<DashboardHomeResumo> =>
+export const getDashboardHomeResumo = (): Promise<DashboardHomeOverview> =>
   api.get('/api/dashboard/home').then((response) => response.data)
+
+export const getDashboardHomeEvolution = (): Promise<DashboardHomeEvolution> =>
+  api.get('/api/dashboard/evolution').then((response) => response.data)
 
 export const getTransacoes = (responsavel: string): Promise<Transacao[]> =>
   api.get(`/api/transacoes/${responsavel}`).then((response) => response.data)

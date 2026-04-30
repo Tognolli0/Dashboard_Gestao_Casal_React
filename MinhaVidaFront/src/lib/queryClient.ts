@@ -2,6 +2,7 @@
 
 export const DASHBOARD_QUERY_KEY = ['dashboard-resumo'] as const
 export const DASHBOARD_HOME_QUERY_KEY = ['dashboard-home-resumo'] as const
+export const DASHBOARD_HOME_EVOLUTION_QUERY_KEY = ['dashboard-home-evolution'] as const
 
 export const queryClient = new QueryClient({
   defaultOptions: {

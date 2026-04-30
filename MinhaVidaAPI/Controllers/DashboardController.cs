@@ -93,7 +93,269 @@ namespace MinhaVidaAPI.Controllers
         [ResponseCache(Duration = 20, Location = ResponseCacheLocation.Any)]
         public async Task<IActionResult> GetHomeResumo()
         {
-            if (_cache.TryGetValue(CacheKeys.DashboardHome, out object? cachedHome) && cachedHome is not null)
+            if (_cache.TryGetValue(CacheKeys.DashboardHomeOverview, out object? cachedHome) && cachedHome is not null)
+            {
+                return Ok(cachedHome);
+            }
+
+            var now = DateTime.Now;
+            var currentMonth = now.Month;
+            var monthLabels = Enumerable.Range(0, 2)
+                .Select(offset => now.AddMonths(-offset).Month)
+                .ToHashSet();
+
+            var metas = await _context.Metas
+                .AsNoTracking()
+                .Select(m => new
+                {
+                    m.Id,
+                    m.Titulo,
+                    m.ValorObjetivo,
+                    m.ValorGuardado,
+                    m.Responsavel,
+                    m.EhReservaEmergencia,
+                    m.CriadaEm,
+                    m.AtualizadaEm
+                })
+                .ToListAsync();
+
+            var desejos = await _context.Desejos
+                .AsNoTracking()
+                .OrderBy(d => d.DataAlvo)
+                .Select(d => new
+                {
+                    d.Id,
+                    d.Titulo,
+                    d.DataAlvo,
+                    d.Icone,
+                    d.Concluido
+                })
+                .ToListAsync();
+
+            var fluxoPorResponsavel = await _context.Transacoes
+                .AsNoTracking()
+                .GroupBy(t => t.Responsavel)
+                .Select(g => new
+                {
+                    Responsavel = g.Key,
+                    Saldo = g.Sum(t => (double?)t.Valor) ?? 0
+                })
+                .ToListAsync();
+
+            var resumoMesAtual = await _context.Transacoes
+                .AsNoTracking()
+                .Where(t => t.Data.Month == currentMonth)
+                .GroupBy(t => t.Tipo == "Entrada")
+                .Select(g => new
+                {
+                    IsEntrada = g.Key,
+                    Total = g.Sum(t => (double?)Math.Abs(t.Valor)) ?? 0
+                })
+                .ToListAsync();
+
+            var categoriasMesAtual = await _context.Transacoes
+                .AsNoTracking()
+                .Where(t => t.Tipo != "Entrada" && t.Data.Month == currentMonth)
+                .GroupBy(t => t.Categoria)
+                .Select(g => new
+                {
+                    Categoria = g.Key,
+                    Total = g.Sum(t => (double?)Math.Abs(t.Valor)) ?? 0
+                })
+                .OrderByDescending(g => g.Total)
+                .ToListAsync();
+
+            var saidasRecentes = await _context.Transacoes
+                .AsNoTracking()
+                .Where(t => t.Tipo != "Entrada" && monthLabels.Contains(t.Data.Month))
+                .GroupBy(t => t.Data.Month)
+                .Select(g => new
+                {
+                    Month = g.Key,
+                    Total = g.Sum(t => (double?)Math.Abs(t.Valor)) ?? 0
+                })
+                .ToListAsync();
+
+            var saldoEu = fluxoPorResponsavel.FirstOrDefault(item => item.Responsavel == "Eu")?.Saldo ?? 0;
+            var saldoDela = fluxoPorResponsavel.FirstOrDefault(item => item.Responsavel == "Namorada")?.Saldo ?? 0;
+            var entradasMes = resumoMesAtual.FirstOrDefault(item => item.IsEntrada)?.Total ?? 0;
+            var saidasMes = resumoMesAtual.FirstOrDefault(item => !item.IsEntrada)?.Total ?? 0;
+            var saldoMes = entradasMes - saidasMes;
+            var taxaPoupanca = entradasMes > 0
+                ? (int)Math.Round((saldoMes / entradasMes) * 100, MidpointRounding.AwayFromZero)
+                : 0;
+
+            var categoriaTopMes = categoriasMesAtual.FirstOrDefault();
+
+            var metasAtivas = metas
+                .Where(meta => !meta.EhReservaEmergencia)
+                .OrderByDescending(meta => meta.ValorGuardado / Math.Max(meta.ValorObjetivo, 1))
+                .ToList();
+
+            var reservaEmergencia = metas.FirstOrDefault(meta => meta.EhReservaEmergencia);
+            var totalMetas = metasAtivas.Sum(meta => meta.ValorObjetivo);
+            var totalGuardadoMetas = metasAtivas.Sum(meta => meta.ValorGuardado);
+            var progressoMetas = totalMetas > 0
+                ? (int)Math.Round((totalGuardadoMetas / totalMetas) * 100, MidpointRounding.AwayFromZero)
+                : 0;
+            var metasConcluidas = metasAtivas.Count(meta => meta.ValorGuardado >= meta.ValorObjetivo);
+            var bucketsAbertos = desejos.Count(item => !item.Concluido);
+
+            var scoreFinanceiro = Math.Max(0, Math.Min(100,
+                45 +
+                (saldoMes >= 0 ? 20 : -20) +
+                (taxaPoupanca >= 20 ? 15 : taxaPoupanca > 0 ? 5 : -10) +
+                (progressoMetas >= 50 ? 10 : progressoMetas > 0 ? 5 : 0) +
+                ((categoriaTopMes?.Total ?? 0) > 0 && saidasMes > 0 && (categoriaTopMes!.Total / saidasMes) > 0.45 ? -10 : 10)
+            ));
+
+            var destaquePrincipal = saldoMes >= 0
+                ? $"Vocês fecharam o mês com {saldoMes:C2} livres até aqui."
+                : $"As saídas do mês estão {Math.Abs(saldoMes):C2} acima da sobra atual.";
+
+            var acaoRecomendada = saldoMes < 0
+                ? "Revisem a categoria mais pesada e segurem gastos variáveis nesta semana."
+                : progressoMetas < 100
+                    ? "Excelente momento para direcionar parte da sobra do mês para uma meta ativa."
+                    : "Com metas bem encaminhadas, vale criar uma nova reserva estratégica para os próximos planos.";
+
+            var mediaSaidasRecentes = saidasRecentes.Count > 0 ? saidasRecentes.Average(item => item.Total) : saidasMes;
+            var objetivoIdealReserva = Math.Max(mediaSaidasRecentes * 6, mediaSaidasRecentes > 0 ? mediaSaidasRecentes : 0);
+            var coberturaReservaMeses = mediaSaidasRecentes > 0 && reservaEmergencia is not null
+                ? reservaEmergencia.ValorGuardado / mediaSaidasRecentes
+                : 0;
+            var faltanteReservaIdeal = Math.Max(objetivoIdealReserva - (reservaEmergencia?.ValorGuardado ?? 0), 0);
+
+            var mediaSaidasHistorica = saidasRecentes.Count > 0 ? saidasRecentes.Average(item => item.Total) : 0;
+            var categoriaPeso = saidasMes > 0 && categoriaTopMes is not null ? categoriaTopMes.Total / saidasMes : 0;
+            var metasParadas = metasAtivas
+                .Where(meta => meta.ValorGuardado < meta.ValorObjetivo)
+                .Select(meta => new
+                {
+                    Meta = meta,
+                    DiasParada = (int)Math.Floor((DateTime.Now - meta.AtualizadaEm).TotalDays)
+                })
+                .Where(item => item.DiasParada >= 45)
+                .OrderByDescending(item => item.DiasParada)
+                .ToList();
+
+            var alertas = new List<object>();
+
+            if (mediaSaidasHistorica > 0 && saidasMes > mediaSaidasHistorica * 1.2)
+            {
+                alertas.Add(new
+                {
+                    id = "gasto-acima",
+                    title = "Gasto acima do normal",
+                    message = $"As saídas do mês estão {(saidasMes - mediaSaidasHistorica):C2} acima da média recente do casal.",
+                    tone = "rose"
+                });
+            }
+
+            if ((categoriaTopMes?.Total ?? 0) > 0 && categoriaPeso >= 0.35)
+            {
+                alertas.Add(new
+                {
+                    id = "categoria-estourando",
+                    title = "Categoria estourando",
+                    message = $"{categoriaTopMes!.Categoria} já consome {(categoriaPeso * 100):F0}% das saídas do mês.",
+                    tone = "amber"
+                });
+            }
+
+            if (entradasMes > 0 && (saldoMes < 0 || taxaPoupanca <= 10))
+            {
+                alertas.Add(new
+                {
+                    id = "saldo-apertado",
+                    title = "Saldo do mês apertando",
+                    message = saldoMes < 0
+                        ? $"O mês está negativo em {Math.Abs(saldoMes):C2}. Vale segurar gastos variáveis agora."
+                        : $"A sobra do mês caiu para {taxaPoupanca}%, abaixo da faixa confortável.",
+                    tone = saldoMes < 0 ? "rose" : "amber"
+                });
+            }
+
+            if (metasParadas.Count > 0)
+            {
+                var metaParada = metasParadas[0];
+                alertas.Add(new
+                {
+                    id = "meta-parada",
+                    title = "Meta parada há muito tempo",
+                    message = $"{metaParada.Meta.Titulo} está sem aporte há {metaParada.DiasParada} dias. Um pequeno reforço já reacende o plano.",
+                    tone = "indigo"
+                });
+            }
+
+            if (alertas.Count == 0)
+            {
+                alertas.Add(new
+                {
+                    id = "sem-alertas",
+                    title = "Painel estável",
+                    message = "Sem alertas críticos agora. O momento está bom para manter constância e reforçar metas.",
+                    tone = "green"
+                });
+            }
+
+            var response = new
+            {
+                metas,
+                desejos,
+                reservaEmergencia,
+                totais = new
+                {
+                    eu = Math.Round(saldoEu, 2),
+                    bia = Math.Round(saldoDela, 2),
+                    juntos = Math.Round(saldoEu + saldoDela, 2)
+                },
+                mesAtual = new
+                {
+                    entradas = Math.Round(entradasMes, 2),
+                    saidas = Math.Round(saidasMes, 2),
+                    saldo = Math.Round(saldoMes, 2),
+                    taxaPoupanca,
+                    categoriaTop = new
+                    {
+                        nome = categoriaTopMes?.Categoria ?? "Sem destaque",
+                        total = Math.Round(categoriaTopMes?.Total ?? 0, 2)
+                    }
+                },
+                metasResumo = new
+                {
+                    totalMetas = Math.Round(totalMetas, 2),
+                    totalGuardado = Math.Round(totalGuardadoMetas, 2),
+                    progresso = progressoMetas,
+                    concluidas = metasConcluidas,
+                    bucketsAbertos
+                },
+                scoreFinanceiro,
+                destaquePrincipal,
+                acaoRecomendada,
+                reservaPlanejamento = new
+                {
+                    objetivoIdeal = Math.Round(objetivoIdealReserva, 2),
+                    coberturaMeses = Math.Round(coberturaReservaMeses, 1),
+                    faltanteIdeal = Math.Round(faltanteReservaIdeal, 2)
+                },
+                alertas = alertas.Take(4).ToList()
+            };
+
+            _cache.Set(CacheKeys.DashboardHomeOverview, response, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30),
+                SlidingExpiration = TimeSpan.FromSeconds(15)
+            });
+
+            return Ok(response);
+        }
+
+        [HttpGet("evolution")]
+        [ResponseCache(Duration = 20, Location = ResponseCacheLocation.Any)]
+        public async Task<IActionResult> GetHomeEvolution()
+        {
+            if (_cache.TryGetValue(CacheKeys.DashboardHomeEvolution, out object? cachedHome) && cachedHome is not null)
             {
                 return Ok(cachedHome);
             }
@@ -406,7 +668,7 @@ namespace MinhaVidaAPI.Controllers
                 alertas = alertas.Take(4).ToList()
             };
 
-            _cache.Set(CacheKeys.DashboardHome, response, new MemoryCacheEntryOptions
+            _cache.Set(CacheKeys.DashboardHomeEvolution, response, new MemoryCacheEntryOptions
             {
                 AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30),
                 SlidingExpiration = TimeSpan.FromSeconds(15)

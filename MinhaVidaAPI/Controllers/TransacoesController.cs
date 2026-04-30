@@ -206,6 +206,8 @@ namespace MinhaVidaAPI.Controllers
         {
             _cache.Remove(CacheKeys.DashboardResumo);
             _cache.Remove(CacheKeys.DashboardHome);
+            _cache.Remove(CacheKeys.DashboardHomeOverview);
+            _cache.Remove(CacheKeys.DashboardHomeEvolution);
             _cache.Remove(CacheKeys.Transacoes("Eu"));
             _cache.Remove(CacheKeys.Transacoes("Namorada"));
         }

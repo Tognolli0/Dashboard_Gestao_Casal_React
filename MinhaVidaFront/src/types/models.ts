@@ -104,20 +104,23 @@ export interface DashboardReservaPlanejamento {
   faltanteIdeal: number
 }
 
-export interface DashboardHomeResumo {
+export interface DashboardHomeOverview {
   metas: Meta[]
   desejos: Desejo[]
   reservaEmergencia: Meta | null
   totais: DashboardTotaisResumo
-  fluxoEu: DashboardFluxoResumo
-  fluxoDela: DashboardFluxoResumo
   mesAtual: DashboardMesAtualResumo
   metasResumo: DashboardMetasResumo
   scoreFinanceiro: number
   destaquePrincipal: string
   acaoRecomendada: string
-  evolucaoMensal: DashboardEvolucaoItem[]
   reservaPlanejamento: DashboardReservaPlanejamento
-  categoriasChart: DashboardCategoriaChartItem[]
   alertas: DashboardAlerta[]
+}
+
+export interface DashboardHomeEvolution {
+  fluxoEu: DashboardFluxoResumo
+  fluxoDela: DashboardFluxoResumo
+  evolucaoMensal: DashboardEvolucaoItem[]
+  categoriasChart: DashboardCategoriaChartItem[]
 }
