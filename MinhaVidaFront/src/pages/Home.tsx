@@ -508,6 +508,7 @@ export default function Home() {
   const objetivoIdealReserva = homeResumo?.reservaPlanejamento.objetivoIdeal ?? 0
   const coberturaReservaMeses = homeResumo?.reservaPlanejamento.coberturaMeses ?? 0
   const faltanteReservaIdeal = homeResumo?.reservaPlanejamento.faltanteIdeal ?? 0
+  const mediaSaidasRecentes = objetivoIdealReserva > 0 ? objetivoIdealReserva / 6 : 0
   const categoriasChart = homeEvolution?.categoriasChart ?? []
   const alertasInteligentes = homeResumo?.alertas ?? []
 
