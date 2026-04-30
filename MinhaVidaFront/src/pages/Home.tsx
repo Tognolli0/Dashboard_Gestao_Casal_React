@@ -292,6 +292,8 @@ export default function Home() {
     queryFn: getDashboardHomeResumo,
     initialData: () => getCachedDashboardHomeResumo()?.data,
     initialDataUpdatedAt: () => getCachedDashboardHomeResumo()?.savedAt,
+    staleTime: 120_000,
+    refetchOnWindowFocus: false,
   })
   const { data: homeEvolution } = useQuery<DashboardHomeEvolution>({
     queryKey: DASHBOARD_HOME_EVOLUTION_QUERY_KEY,
@@ -299,6 +301,8 @@ export default function Home() {
     enabled: aba === 'evolucao',
     initialData: () => getCachedDashboardHomeEvolution()?.data,
     initialDataUpdatedAt: () => getCachedDashboardHomeEvolution()?.savedAt,
+    staleTime: 180_000,
+    refetchOnWindowFocus: false,
   })
   const mesChecklist = new Date().toISOString().slice(0, 7)
 

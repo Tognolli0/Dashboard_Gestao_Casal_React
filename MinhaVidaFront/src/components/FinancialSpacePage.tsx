@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { deleteTransacao, getCachedTransacoesPorPeriodo, getTransacoesPorPeriodo, postTransacao } from '../services/api'
@@ -64,6 +64,7 @@ export default function FinancialSpacePage({
   saldoLabels,
 }: FinancialSpacePageProps) {
   const queryClient = useQueryClient()
+  const isSubmittingRef = useRef(false)
   const [mes, setMes] = useState(new Date().getMonth())
   const [aba, setAba] = useState(abas[0].id)
   const [form, setForm] = useState({
@@ -89,6 +90,10 @@ export default function FinancialSpacePage({
 
   const syncPersistedCategoriasCache = (scope: 'Todos' | 'Eu' | 'Namorada', transactions: Transacao[]) => {
     writeCachedValue(`transacoes-gerais-${scope}-${anoAtual}-${mesAtual}`, transactions)
+  }
+
+  const releaseSubmitLock = () => {
+    isSubmittingRef.current = false
   }
 
   const { data: lista = [], isLoading, isFetching } = useQuery({
@@ -175,6 +180,7 @@ export default function FinancialSpacePage({
         valor: '',
       })
       setErro('')
+      releaseSubmitLock()
     },
     onError: (error: any, _payload, context) => {
       if (context?.previousTransactions) {
@@ -193,6 +199,10 @@ export default function FinancialSpacePage({
         syncPersistedCategoriasCache(responsavel, context.previousCategoriasResponsavel)
       }
       setErro(error?.response?.data ?? 'Erro ao salvar. Tente novamente.')
+      releaseSubmitLock()
+    },
+    onSettled: () => {
+      releaseSubmitLock()
     },
   })
 
@@ -287,10 +297,14 @@ export default function FinancialSpacePage({
   const { saldo, entradas, saidas } = summarizeTransactions(filtradas)
 
   const salvar = () => {
+    if (isSubmittingRef.current || saveMutation.isPending) {
+      return
+    }
+
     setErro('')
 
     if (!form.descricao.trim()) {
-      setErro('Informe a descricao.')
+      setErro('Informe a descrição.')
       return
     }
 
@@ -298,6 +312,8 @@ export default function FinancialSpacePage({
       setErro('Informe um valor maior que zero.')
       return
     }
+
+    isSubmittingRef.current = true
 
     saveMutation.mutate({
       responsavel,
@@ -363,16 +379,16 @@ export default function FinancialSpacePage({
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <StatCard label={abaAtual.id === abas[0].id ? saldoLabels.first : saldoLabels.second} value={fmt(saldo)} color={saldo >= 0 ? 'green' : 'red'} />
         <StatCard label="Entradas" value={fmt(entradas)} color="green" />
-        <StatCard label="Saidas" value={fmt(saidas)} color="red" />
+        <StatCard label="Saídas" value={fmt(saidas)} color="red" />
       </div>
 
       <Card className={`p-6 ${theme.accentSoftBorder}`}>
         <h3 className="mb-4 text-xs font-black uppercase tracking-widest text-slate-500">
-          Novo Lancamento - {abaAtual.label}
+          Novo lançamento - {abaAtual.label}
         </h3>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <Input label="Descricao" value={form.descricao} onChange={(value) => setForm({ ...form, descricao: value })} placeholder="Ex: Mercado, Receita..." />
+          <Input label="Descrição" value={form.descricao} onChange={(value) => setForm({ ...form, descricao: value })} placeholder="Ex: Mercado, Receita..." />
           <Input label="Valor (R$)" type="number" value={form.valor} onChange={(value) => setForm({ ...form, valor: value })} placeholder="0,00" />
           <Select
             label="Tipo"
@@ -395,7 +411,7 @@ export default function FinancialSpacePage({
               disabled={saveMutation.isPending}
               className={`w-full ${theme.accentButton} ${theme.accentButtonHover ?? ''}`}
             >
-              {saveMutation.isPending ? 'Salvando...' : '+ Lancar'}
+              {saveMutation.isPending ? 'Salvando...' : '+ Lançar'}
             </Btn>
           </div>
         </div>
@@ -462,7 +478,7 @@ export default function FinancialSpacePage({
       <Card className="overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-100 p-4">
           <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-            {filtradas.length} lancamentos em {MESES[mes]}
+            {filtradas.length} lançamentos em {MESES[mes]}
           </p>
           <Badge label={abaAtual.label} color="indigo" />
         </div>
@@ -470,7 +486,7 @@ export default function FinancialSpacePage({
         {filtradas.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-slate-400">
             <Plus size={32} className="mb-2 opacity-30" />
-            <p className="text-sm font-bold">Nenhum lancamento encontrado</p>
+            <p className="text-sm font-bold">Nenhum lançamento encontrado</p>
             <p className="text-xs">Ajuste os filtros ou adicione um novo lançamento</p>
           </div>
         ) : (
@@ -478,7 +494,7 @@ export default function FinancialSpacePage({
             <thead className="border-b border-slate-100 bg-slate-50 text-[10px] font-black uppercase text-slate-400">
               <tr>
                 <th className="p-4">Data</th>
-                <th className="p-4">Descricao</th>
+                <th className="p-4">Descrição</th>
                 <th className="p-4">Categoria</th>
                 <th className="p-4 text-right">Valor</th>
                 <th className="w-10 p-4"></th>

@@ -1,15 +1,10 @@
+import { memo, useMemo } from 'react'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Briefcase, Wallet } from 'lucide-react'
+import { Briefcase, TrendingUp, Wallet } from 'lucide-react'
 import { Badge, Card, fmt } from './ui'
 import type { DashboardCategoriaChartItem, DashboardEvolucaoItem, DashboardFluxoResumo } from '../types/models'
 
-function getBarHeight(value: number, max: number) {
-  if (value <= 0 || max <= 0) return 14
-  const normalized = value / max
-  return Math.round(14 + normalized * 150)
-}
-
-function FluxoCard({
+const FluxoCard = memo(function FluxoCard({
   titulo,
   icon,
   iconWrap,
@@ -23,38 +18,11 @@ function FluxoCard({
   resumo: DashboardFluxoResumo
 }) {
   const { entradas, saidas, saldo } = resumo
-  const escala = Math.max(entradas, saidas, Math.abs(saldo), 1)
-  const barras = [
-    {
-      label: 'Entradas',
-      value: entradas,
-      color: 'from-emerald-400 to-emerald-600',
-      glow: 'shadow-emerald-200',
-    },
-    {
-      label: 'Saídas',
-      value: saidas,
-      color: 'from-rose-400 to-rose-600',
-      glow: 'shadow-rose-200',
-    },
-    {
-      label: 'Saldo',
-      value: Math.abs(saldo),
-      color: saldo >= 0 ? 'from-sky-400 to-indigo-600' : 'from-amber-300 to-orange-500',
-      glow: saldo >= 0 ? 'shadow-indigo-200' : 'shadow-orange-200',
-    },
-  ]
-
-  const axisValues = [100, 66, 33, 0].map((pct) => ({
-    pct,
-    value: fmt((escala * pct) / 100),
-  }))
 
   return (
-    <Card className="relative overflow-hidden border-slate-200 p-8 shadow-sm">
-      <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-slate-50 to-transparent" />
-      <div className="relative mb-8 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 italic">
+    <Card className="border-slate-200 p-6 shadow-sm">
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
           <div className={`rounded-2xl border p-3 ${iconWrap}`}>
             <div className={iconColor}>{icon}</div>
           </div>
@@ -66,64 +34,49 @@ function FluxoCard({
         <Badge label={saldo >= 0 ? 'Saldo positivo' : 'Saldo apertado'} color={saldo >= 0 ? 'green' : 'amber'} />
       </div>
 
-      <div className="relative rounded-[28px] border border-slate-200 bg-slate-50/80 p-5">
-        <div className="mb-5 grid grid-cols-3 gap-3">
-          <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Entradas</p>
-            <p className="mt-2 text-sm font-black text-emerald-600">{fmt(entradas)}</p>
-          </div>
-          <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saídas</p>
-            <p className="mt-2 text-sm font-black text-rose-600">{fmt(saidas)}</p>
-          </div>
-          <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saldo</p>
-            <p className={`mt-2 text-sm font-black ${saldo >= 0 ? 'text-indigo-600' : 'text-orange-600'}`}>{fmt(saldo)}</p>
-          </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Entradas</p>
+          <p className="mt-2 text-lg font-black text-emerald-600">{fmt(entradas)}</p>
         </div>
-
-        <div className="relative grid grid-cols-[56px_minmax(0,1fr)] gap-4">
-          <div className="relative h-56 text-[9px] font-black uppercase tracking-wider text-slate-300">
-            {axisValues.map((axis) => (
-              <div
-                key={axis.pct}
-                className="absolute left-0 right-0 -translate-y-1/2"
-                style={{ top: `${100 - axis.pct}%` }}
-              >
-                {axis.value}
-              </div>
-            ))}
-          </div>
-
-          <div className="relative h-56 rounded-[24px] border border-slate-200 bg-white px-6 pb-4 pt-5 shadow-inner">
-            {axisValues.map((axis) => (
-              <div
-                key={axis.pct}
-                className="absolute left-4 right-4 border-t border-dashed border-slate-200"
-                style={{ top: `${100 - axis.pct}%` }}
-              />
-            ))}
-
-            <div className="relative flex h-full items-end justify-around gap-4">
-              {barras.map((barra) => (
-                <div key={barra.label} className="flex h-full flex-1 flex-col items-center justify-end gap-3">
-                  <span className="text-[10px] font-black text-slate-600">{fmt(barra.value)}</span>
-                  <div
-                    className={`w-full max-w-[92px] rounded-t-[22px] bg-gradient-to-t ${barra.color} shadow-lg ${barra.glow} transition-all duration-700`}
-                    style={{ height: `${getBarHeight(barra.value, escala)}px` }}
-                  />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{barra.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saídas</p>
+          <p className="mt-2 text-lg font-black text-rose-600">{fmt(saidas)}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saldo</p>
+          <p className={`mt-2 text-lg font-black ${saldo >= 0 ? 'text-indigo-600' : 'text-orange-600'}`}>{fmt(saldo)}</p>
         </div>
       </div>
     </Card>
   )
+})
+
+function buildCategoriaPalette(items: DashboardCategoriaChartItem[]) {
+  const topItems = items.slice(0, 5)
+  const restValue = items.slice(5).reduce((sum, item) => sum + item.value, 0)
+
+  if (restValue <= 0) {
+    return topItems
+  }
+
+  return topItems.concat({
+    name: 'Outros',
+    value: restValue,
+    color: '#94a3b8',
+  })
 }
 
-export default function HomeEvolutionSection({
+function monthLabel(value: string) {
+  return value.length > 3 ? value.slice(0, 3) : value
+}
+
+function compactCurrency(value: number) {
+  if (Math.abs(value) < 1000) return `R$${Math.round(value)}`
+  return `R$${Math.round(value / 1000)}k`
+}
+
+function EvolutionSection({
   fluxoEu,
   fluxoDela,
   evolucaoMensal,
@@ -134,6 +87,26 @@ export default function HomeEvolutionSection({
   evolucaoMensal: DashboardEvolucaoItem[]
   categoriasChart: DashboardCategoriaChartItem[]
 }) {
+  const chartMensal = useMemo(
+    () => evolucaoMensal.map((item) => ({ ...item, mesCurto: monthLabel(item.mes) })),
+    [evolucaoMensal],
+  )
+
+  const chartCategorias = useMemo(
+    () => buildCategoriaPalette(categoriasChart),
+    [categoriasChart],
+  )
+
+  const melhorSaldo = useMemo(() => {
+    if (chartMensal.length === 0) return null
+    return chartMensal.reduce((best, item) => (item.saldo > best.saldo ? item : best), chartMensal[0])
+  }, [chartMensal])
+
+  const mediaSaldo = useMemo(() => {
+    if (chartMensal.length === 0) return 0
+    return chartMensal.reduce((sum, item) => sum + item.saldo, 0) / chartMensal.length
+  }, [chartMensal])
+
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
@@ -154,32 +127,54 @@ export default function HomeEvolutionSection({
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.5fr_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card className="p-5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Melhor mês</p>
+          <p className="mt-3 text-2xl font-black tracking-tight text-slate-950">{melhorSaldo?.mes ?? 'Sem dados'}</p>
+          <p className="mt-2 text-xs font-bold text-slate-500">
+            {melhorSaldo ? `${fmt(melhorSaldo.saldo)} de saldo acumulado.` : 'Ainda não há histórico suficiente.'}
+          </p>
+        </Card>
+        <Card className="p-5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Média de saldo</p>
+          <p className={`mt-3 text-2xl font-black tracking-tight ${mediaSaldo >= 0 ? 'text-indigo-600' : 'text-orange-600'}`}>
+            {fmt(mediaSaldo)}
+          </p>
+          <p className="mt-2 text-xs font-bold text-slate-500">Leitura mensal média do comportamento do casal.</p>
+        </Card>
+        <Card className="p-5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Categorias ativas</p>
+          <p className="mt-3 text-2xl font-black tracking-tight text-slate-950">{chartCategorias.length}</p>
+          <p className="mt-2 text-xs font-bold text-slate-500">Resumo visual concentrado nas categorias mais relevantes.</p>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.45fr_0.95fr]">
         <Card className="p-6">
           <div className="mb-6 flex items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Histórico visual</p>
               <h3 className="text-lg font-black uppercase italic text-slate-950">Evolução mensal do casal</h3>
             </div>
-            <Badge label="12 meses" color="indigo" />
+            <Badge label={`${chartMensal.length} meses`} color="indigo" />
           </div>
 
-          <div className="h-[320px]">
+          <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={evolucaoMensal}>
+              <AreaChart data={chartMensal}>
                 <defs>
                   <linearGradient id="saldoFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
+                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.24} />
                     <stop offset="100%" stopColor="#6366f1" stopOpacity={0.04} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="mes" stroke="#94a3b8" tickLine={false} axisLine={false} />
-                <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={(value) => `R$${Math.round(value / 1000)}k`} />
+                <XAxis dataKey="mesCurto" stroke="#94a3b8" tickLine={false} axisLine={false} />
+                <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={compactCurrency} />
                 <Tooltip formatter={(value: number) => fmt(Number(value))} contentStyle={{ borderRadius: 16, borderColor: '#e2e8f0' }} />
-                <Area type="monotone" dataKey="entradas" stroke="#10b981" fill="transparent" strokeWidth={2} />
-                <Area type="monotone" dataKey="saidas" stroke="#f43f5e" fill="transparent" strokeWidth={2} />
-                <Area type="monotone" dataKey="saldo" stroke="#6366f1" fill="url(#saldoFill)" strokeWidth={3} />
+                <Area isAnimationActive={false} type="monotone" dataKey="entradas" stroke="#10b981" fill="transparent" strokeWidth={2} />
+                <Area isAnimationActive={false} type="monotone" dataKey="saidas" stroke="#f43f5e" fill="transparent" strokeWidth={2} />
+                <Area isAnimationActive={false} type="monotone" dataKey="saldo" stroke="#6366f1" fill="url(#saldoFill)" strokeWidth={3} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -191,14 +186,22 @@ export default function HomeEvolutionSection({
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Composição</p>
               <h3 className="text-lg font-black uppercase italic text-slate-950">Saídas por categoria</h3>
             </div>
-            <Badge label={`${categoriasChart.length} grupos`} color="pink" />
+            <Badge label={`${chartCategorias.length} grupos`} color="pink" />
           </div>
 
-          <div className="h-[280px]">
+          <div className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={categoriasChart} dataKey="value" nameKey="name" innerRadius={62} outerRadius={94} paddingAngle={3}>
-                  {categoriasChart.map((entry) => (
+                <Pie
+                  isAnimationActive={false}
+                  data={chartCategorias}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={58}
+                  outerRadius={90}
+                  paddingAngle={3}
+                >
+                  {chartCategorias.map((entry) => (
                     <Cell key={entry.name} fill={entry.color} />
                   ))}
                 </Pie>
@@ -208,7 +211,7 @@ export default function HomeEvolutionSection({
           </div>
 
           <div className="space-y-3">
-            {categoriasChart.map((item) => (
+            {chartCategorias.map((item) => (
               <div key={item.name} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
                 <div className="flex items-center gap-3">
                   <span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
@@ -230,15 +233,15 @@ export default function HomeEvolutionSection({
           <Badge label="Saldos individuais" color="amber" />
         </div>
 
-        <div className="h-[300px]">
+        <div className="h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={evolucaoMensal} barGap={10}>
+            <BarChart data={chartMensal} barGap={10}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="mes" stroke="#94a3b8" tickLine={false} axisLine={false} />
-              <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={(value) => `R$${Math.round(value / 1000)}k`} />
+              <XAxis dataKey="mesCurto" stroke="#94a3b8" tickLine={false} axisLine={false} />
+              <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={compactCurrency} />
               <Tooltip formatter={(value: number) => fmt(Number(value))} contentStyle={{ borderRadius: 16, borderColor: '#e2e8f0' }} />
-              <Bar dataKey="diogo" name="Diogo" radius={[10, 10, 0, 0]} fill="#6366f1" />
-              <Bar dataKey="beatriz" name="Beatriz" radius={[10, 10, 0, 0]} fill="#ec4899" />
+              <Bar isAnimationActive={false} dataKey="diogo" name="Diogo" radius={[10, 10, 0, 0]} fill="#6366f1" />
+              <Bar isAnimationActive={false} dataKey="beatriz" name="Beatriz" radius={[10, 10, 0, 0]} fill="#ec4899" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -246,3 +249,5 @@ export default function HomeEvolutionSection({
     </div>
   )
 }
+
+export default memo(EvolutionSection)
