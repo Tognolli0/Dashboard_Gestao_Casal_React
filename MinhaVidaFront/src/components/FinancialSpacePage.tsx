@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { deleteTransacao, getCachedTransacoesPorPeriodo, getTransacoesPorPeriodo, postTransacao } from '../services/api'
+import { writeCachedValue } from '../lib/persistedApiCache'
 import { DASHBOARD_QUERY_KEY } from '../lib/queryClient'
 import {
   appendTransaction,
@@ -77,12 +78,24 @@ export default function FinancialSpacePage({
   const [ordenacao, setOrdenacao] = useState<'recentes' | 'maiores' | 'menores'>('recentes')
   const [erro, setErro] = useState('')
   const anoAtual = new Date().getFullYear()
+  const mesAtual = mes + 1
+  const transacoesQueryKey = ['transacoes', responsavel, anoAtual, mes] as const
+  const categoriasTodosQueryKey = ['categorias-transacoes', anoAtual, mesAtual, 'Todos'] as const
+  const categoriasResponsavelQueryKey = ['categorias-transacoes', anoAtual, mesAtual, responsavel] as const
+
+  const syncPersistedMonthlyCache = (transactions: Transacao[]) => {
+    writeCachedValue(`transacoes-${responsavel}-${anoAtual}-${mesAtual}`, transactions)
+  }
+
+  const syncPersistedCategoriasCache = (scope: 'Todos' | 'Eu' | 'Namorada', transactions: Transacao[]) => {
+    writeCachedValue(`transacoes-gerais-${scope}-${anoAtual}-${mesAtual}`, transactions)
+  }
 
   const { data: lista = [], isLoading, isFetching } = useQuery({
-    queryKey: ['transacoes', responsavel, anoAtual, mes],
-    queryFn: () => getTransacoesPorPeriodo(responsavel, mes + 1, anoAtual),
-    initialData: () => getCachedTransacoesPorPeriodo(responsavel, mes + 1, anoAtual)?.data,
-    initialDataUpdatedAt: () => getCachedTransacoesPorPeriodo(responsavel, mes + 1, anoAtual)?.savedAt,
+    queryKey: transacoesQueryKey,
+    queryFn: () => getTransacoesPorPeriodo(responsavel, mesAtual, anoAtual),
+    initialData: () => getCachedTransacoesPorPeriodo(responsavel, mesAtual, anoAtual)?.data,
+    initialDataUpdatedAt: () => getCachedTransacoesPorPeriodo(responsavel, mesAtual, anoAtual)?.savedAt,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   })
@@ -90,16 +103,26 @@ export default function FinancialSpacePage({
   const saveMutation = useMutation({
     mutationFn: postTransacao,
     onMutate: async (payload) => {
-      await queryClient.cancelQueries({ queryKey: ['transacoes', responsavel, anoAtual, mes] })
+      await queryClient.cancelQueries({ queryKey: transacoesQueryKey })
       await queryClient.cancelQueries({ queryKey: DASHBOARD_QUERY_KEY })
+      await queryClient.cancelQueries({ queryKey: categoriasTodosQueryKey })
+      await queryClient.cancelQueries({ queryKey: categoriasResponsavelQueryKey })
 
-      const previousTransactions = queryClient.getQueryData<Transacao[]>(['transacoes', responsavel, anoAtual, mes]) ?? []
+      const previousTransactions = queryClient.getQueryData<Transacao[]>(transacoesQueryKey) ?? []
       const previousDashboard = queryClient.getQueryData<DashboardResumo>(DASHBOARD_QUERY_KEY)
+      const previousCategoriasTodos = queryClient.getQueryData<Transacao[]>(categoriasTodosQueryKey) ?? []
+      const previousCategoriasResponsavel = queryClient.getQueryData<Transacao[]>(categoriasResponsavelQueryKey) ?? []
       const optimisticTransaction = buildOptimisticTransaction(payload)
+      const nextTransactions = appendTransaction(previousTransactions, optimisticTransaction)
+      const nextCategoriasTodos = appendTransaction(previousCategoriasTodos, optimisticTransaction)
+      const nextCategoriasResponsavel = appendTransaction(previousCategoriasResponsavel, optimisticTransaction)
 
-      queryClient.setQueryData<Transacao[]>(['transacoes', responsavel, anoAtual, mes], (current = []) =>
-        appendTransaction(current, optimisticTransaction),
-      )
+      queryClient.setQueryData<Transacao[]>(transacoesQueryKey, nextTransactions)
+      queryClient.setQueryData<Transacao[]>(categoriasTodosQueryKey, nextCategoriasTodos)
+      queryClient.setQueryData<Transacao[]>(categoriasResponsavelQueryKey, nextCategoriasResponsavel)
+      syncPersistedMonthlyCache(nextTransactions)
+      syncPersistedCategoriasCache('Todos', nextCategoriasTodos)
+      syncPersistedCategoriasCache(responsavel, nextCategoriasResponsavel)
 
       queryClient.setQueryData<DashboardResumo | undefined>(DASHBOARD_QUERY_KEY, (current) =>
         updateDashboardTransactions(current, responsavel, (transactions) =>
@@ -107,12 +130,37 @@ export default function FinancialSpacePage({
         ),
       )
 
-      return { previousTransactions, previousDashboard, optimisticId: optimisticTransaction.id }
+      return {
+        previousTransactions,
+        previousDashboard,
+        previousCategoriasTodos,
+        previousCategoriasResponsavel,
+        optimisticId: optimisticTransaction.id,
+      }
     },
     onSuccess: (savedTransaction, _payload, context) => {
-      queryClient.setQueryData<Transacao[]>(['transacoes', responsavel, anoAtual, mes], (current = []) =>
-        replaceTransaction(current, context?.optimisticId ?? savedTransaction.id, savedTransaction),
+      const nextTransactions = replaceTransaction(
+        queryClient.getQueryData<Transacao[]>(transacoesQueryKey) ?? [],
+        context?.optimisticId ?? savedTransaction.id,
+        savedTransaction,
       )
+      const nextCategoriasTodos = replaceTransaction(
+        queryClient.getQueryData<Transacao[]>(categoriasTodosQueryKey) ?? [],
+        context?.optimisticId ?? savedTransaction.id,
+        savedTransaction,
+      )
+      const nextCategoriasResponsavel = replaceTransaction(
+        queryClient.getQueryData<Transacao[]>(categoriasResponsavelQueryKey) ?? [],
+        context?.optimisticId ?? savedTransaction.id,
+        savedTransaction,
+      )
+
+      queryClient.setQueryData<Transacao[]>(transacoesQueryKey, nextTransactions)
+      queryClient.setQueryData<Transacao[]>(categoriasTodosQueryKey, nextCategoriasTodos)
+      queryClient.setQueryData<Transacao[]>(categoriasResponsavelQueryKey, nextCategoriasResponsavel)
+      syncPersistedMonthlyCache(nextTransactions)
+      syncPersistedCategoriasCache('Todos', nextCategoriasTodos)
+      syncPersistedCategoriasCache(responsavel, nextCategoriasResponsavel)
 
       queryClient.setQueryData<DashboardResumo | undefined>(DASHBOARD_QUERY_KEY, (current) =>
         updateDashboardTransactions(current, responsavel, (transactions) =>
@@ -130,10 +178,19 @@ export default function FinancialSpacePage({
     },
     onError: (error: any, _payload, context) => {
       if (context?.previousTransactions) {
-        queryClient.setQueryData(['transacoes', responsavel, anoAtual, mes], context.previousTransactions)
+        queryClient.setQueryData(transacoesQueryKey, context.previousTransactions)
+        syncPersistedMonthlyCache(context.previousTransactions)
       }
       if (context?.previousDashboard) {
         queryClient.setQueryData(DASHBOARD_QUERY_KEY, context.previousDashboard)
+      }
+      if (context?.previousCategoriasTodos) {
+        queryClient.setQueryData(categoriasTodosQueryKey, context.previousCategoriasTodos)
+        syncPersistedCategoriasCache('Todos', context.previousCategoriasTodos)
+      }
+      if (context?.previousCategoriasResponsavel) {
+        queryClient.setQueryData(categoriasResponsavelQueryKey, context.previousCategoriasResponsavel)
+        syncPersistedCategoriasCache(responsavel, context.previousCategoriasResponsavel)
       }
       setErro(error?.response?.data ?? 'Erro ao salvar. Tente novamente.')
     },
@@ -142,15 +199,25 @@ export default function FinancialSpacePage({
   const deleteMutation = useMutation({
     mutationFn: deleteTransacao,
     onMutate: async (transactionId) => {
-      await queryClient.cancelQueries({ queryKey: ['transacoes', responsavel, anoAtual, mes] })
+      await queryClient.cancelQueries({ queryKey: transacoesQueryKey })
       await queryClient.cancelQueries({ queryKey: DASHBOARD_QUERY_KEY })
+      await queryClient.cancelQueries({ queryKey: categoriasTodosQueryKey })
+      await queryClient.cancelQueries({ queryKey: categoriasResponsavelQueryKey })
 
-      const previousTransactions = queryClient.getQueryData<Transacao[]>(['transacoes', responsavel, anoAtual, mes]) ?? []
+      const previousTransactions = queryClient.getQueryData<Transacao[]>(transacoesQueryKey) ?? []
       const previousDashboard = queryClient.getQueryData<DashboardResumo>(DASHBOARD_QUERY_KEY)
+      const previousCategoriasTodos = queryClient.getQueryData<Transacao[]>(categoriasTodosQueryKey) ?? []
+      const previousCategoriasResponsavel = queryClient.getQueryData<Transacao[]>(categoriasResponsavelQueryKey) ?? []
+      const nextTransactions = removeTransaction(previousTransactions, transactionId)
+      const nextCategoriasTodos = removeTransaction(previousCategoriasTodos, transactionId)
+      const nextCategoriasResponsavel = removeTransaction(previousCategoriasResponsavel, transactionId)
 
-      queryClient.setQueryData<Transacao[]>(['transacoes', responsavel, anoAtual, mes], (current = []) =>
-        removeTransaction(current, transactionId),
-      )
+      queryClient.setQueryData<Transacao[]>(transacoesQueryKey, nextTransactions)
+      queryClient.setQueryData<Transacao[]>(categoriasTodosQueryKey, nextCategoriasTodos)
+      queryClient.setQueryData<Transacao[]>(categoriasResponsavelQueryKey, nextCategoriasResponsavel)
+      syncPersistedMonthlyCache(nextTransactions)
+      syncPersistedCategoriasCache('Todos', nextCategoriasTodos)
+      syncPersistedCategoriasCache(responsavel, nextCategoriasResponsavel)
 
       queryClient.setQueryData<DashboardResumo | undefined>(DASHBOARD_QUERY_KEY, (current) =>
         updateDashboardTransactions(current, responsavel, (transactions) =>
@@ -158,14 +225,28 @@ export default function FinancialSpacePage({
         ),
       )
 
-      return { previousTransactions, previousDashboard }
+      return {
+        previousTransactions,
+        previousDashboard,
+        previousCategoriasTodos,
+        previousCategoriasResponsavel,
+      }
     },
     onError: (_error, _transactionId, context) => {
       if (context?.previousTransactions) {
-        queryClient.setQueryData(['transacoes', responsavel, anoAtual, mes], context.previousTransactions)
+        queryClient.setQueryData(transacoesQueryKey, context.previousTransactions)
+        syncPersistedMonthlyCache(context.previousTransactions)
       }
       if (context?.previousDashboard) {
         queryClient.setQueryData(DASHBOARD_QUERY_KEY, context.previousDashboard)
+      }
+      if (context?.previousCategoriasTodos) {
+        queryClient.setQueryData(categoriasTodosQueryKey, context.previousCategoriasTodos)
+        syncPersistedCategoriasCache('Todos', context.previousCategoriasTodos)
+      }
+      if (context?.previousCategoriasResponsavel) {
+        queryClient.setQueryData(categoriasResponsavelQueryKey, context.previousCategoriasResponsavel)
+        syncPersistedCategoriasCache(responsavel, context.previousCategoriasResponsavel)
       }
     },
   })
@@ -266,6 +347,7 @@ export default function FinancialSpacePage({
             {abas.map((item) => (
               <button
                 key={item.id}
+                type="button"
                 onClick={() => setAba(item.id)}
                 className={`rounded-lg px-4 py-2 text-xs font-black uppercase transition-all ${
                   aba === item.id ? 'bg-white shadow-sm' : theme.inactiveTab
@@ -297,7 +379,7 @@ export default function FinancialSpacePage({
             value={form.tipo}
             onChange={(value) => setForm({ ...form, tipo: value as 'Entrada' | 'Saída' })}
             options={[
-              { value: 'Saída', label: 'Saida' },
+              { value: 'Saída', label: 'Saída' },
               { value: 'Entrada', label: 'Entrada' },
             ]}
           />
@@ -413,6 +495,7 @@ export default function FinancialSpacePage({
                   </td>
                   <td className="p-4 text-right">
                     <button
+                      type="button"
                       onClick={() => deleteMutation.mutate(transaction.id)}
                       disabled={deleteMutation.isPending}
                       className="text-slate-300 transition-colors hover:text-red-500 disabled:opacity-50"
