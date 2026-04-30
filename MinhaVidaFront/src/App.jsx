@@ -1,15 +1,13 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { useEffect } from 'react'
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
 import { Heart, LayoutDashboard, PieChart, User } from 'lucide-react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { DASHBOARD_HOME_QUERY_KEY, queryClient } from './lib/queryClient'
 import { getDashboardHomeResumo, getTransacoesGeraisPorPeriodo, getTransacoesPorPeriodo, warmUpAPI } from './services/api'
-import { SkeletonDashboard } from './components/ui'
-
-const Home = lazy(() => import('./pages/Home'))
-const MeuEspaco = lazy(() => import('./pages/MeuEspaco'))
-const EspacoDela = lazy(() => import('./pages/EspacoDela'))
-const Categorias = lazy(() => import('./pages/Categorias'))
+import Home from './pages/Home'
+import MeuEspaco from './pages/MeuEspaco'
+import EspacoDela from './pages/EspacoDela'
+import Categorias from './pages/Categorias'
 
 function AppShell() {
   useEffect(() => {
@@ -100,14 +98,12 @@ function AppShell() {
 
         <main className="flex-1 overflow-y-auto">
           <div className="p-4 md:p-8 xl:p-10">
-            <Suspense fallback={<SkeletonDashboard />}>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/meu-espaco" element={<MeuEspaco />} />
-                <Route path="/espaco-dela" element={<EspacoDela />} />
-                <Route path="/categorias" element={<Categorias />} />
-              </Routes>
-            </Suspense>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/meu-espaco" element={<MeuEspaco />} />
+              <Route path="/espaco-dela" element={<EspacoDela />} />
+              <Route path="/categorias" element={<Categorias />} />
+            </Routes>
           </div>
         </main>
       </div>

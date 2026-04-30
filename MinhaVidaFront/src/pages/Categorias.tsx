@@ -12,11 +12,13 @@ export default function Categorias() {
   const [filtroTexto, setFiltroTexto] = useState('')
   const anoAtual = new Date().getFullYear()
 
-  const { data: transacoesMes = [], isLoading } = useQuery<Transacao[]>({
+  const { data: transacoesMes = [], isLoading, isFetching } = useQuery<Transacao[]>({
     queryKey: ['categorias-transacoes', anoAtual, mesSelecionado, pessoaSelecionada],
     queryFn: () => getTransacoesGeraisPorPeriodo(mesSelecionado, anoAtual, pessoaSelecionada),
     initialData: () => getCachedTransacoesGeraisPorPeriodo(mesSelecionado, anoAtual, pessoaSelecionada)?.data,
     initialDataUpdatedAt: () => getCachedTransacoesGeraisPorPeriodo(mesSelecionado, anoAtual, pessoaSelecionada)?.savedAt,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   })
 
   const termoBusca = filtroTexto.trim().toLowerCase()
@@ -51,7 +53,7 @@ export default function Categorias() {
     .sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor))
     .slice(0, 5)
 
-  if (isLoading) return <Spinner />
+  if (isLoading && transacoesMes.length === 0) return <Spinner />
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 pb-10 tracking-tight animate-fade-up">
@@ -61,6 +63,11 @@ export default function Categorias() {
             Categorias <span className="font-black text-indigo-600">Analise</span>
           </h2>
           <p className="text-[10px] font-bold uppercase italic tracking-widest text-slate-500">Mapeamento Inteligente de Gastos</p>
+          {isFetching && (
+            <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Atualizando dados...
+            </p>
+          )}
         </div>
 
         <div className="flex w-fit gap-2 rounded-2xl border border-slate-200 bg-slate-100 p-1.5 shadow-inner">

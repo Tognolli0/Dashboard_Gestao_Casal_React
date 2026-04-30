@@ -78,11 +78,13 @@ export default function FinancialSpacePage({
   const [erro, setErro] = useState('')
   const anoAtual = new Date().getFullYear()
 
-  const { data: lista = [], isLoading } = useQuery({
+  const { data: lista = [], isLoading, isFetching } = useQuery({
     queryKey: ['transacoes', responsavel, anoAtual, mes],
     queryFn: () => getTransacoesPorPeriodo(responsavel, mes + 1, anoAtual),
     initialData: () => getCachedTransacoesPorPeriodo(responsavel, mes + 1, anoAtual)?.data,
     initialDataUpdatedAt: () => getCachedTransacoesPorPeriodo(responsavel, mes + 1, anoAtual)?.savedAt,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   })
 
   const saveMutation = useMutation({
@@ -234,7 +236,7 @@ export default function FinancialSpacePage({
     setOrdenacao('recentes')
   }
 
-  if (isLoading) return <Spinner />
+  if (isLoading && lista.length === 0) return <Spinner />
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 pb-10 text-slate-900 animate-fade-up">
@@ -244,6 +246,11 @@ export default function FinancialSpacePage({
             {title} <span className={theme.accentText}>{accent}</span>
           </h2>
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{subtitle}</p>
+          {isFetching && (
+            <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Atualizando dados...
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-3">
